@@ -192,6 +192,24 @@ def list_agents():
         })
     return jsonify(agents)
 
+
+@app.route('/api/logs', methods=['GET'])
+def list_logs():
+    """Return recent logs (for dashboard). Query param: ?limit=20"""
+    try:
+        limit = int(request.args.get('limit', 20))
+    except Exception:
+        limit = 20
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("SELECT * FROM logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        row = dict(r)
+        result.append(row)
+    return jsonify(result)
+
 @app.route('/api/baseline/<user>', methods=['GET'])
 def get_user_baseline(user):
     """
@@ -225,6 +243,7 @@ def dashboard():
     return render_template('dashboard.html') # You will use your existing dashboard.html here
 
 if __name__ == '__main__':
+    # Try to launch the Streamlit dashboard in the background (non-blocking)
     print("[*] Server Brain (app.py) Initialized...")
     print("[*] Listening on http://0.0.0.0:5000")
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
