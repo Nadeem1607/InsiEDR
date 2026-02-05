@@ -1,3 +1,33 @@
+from flask import Flask, request, jsonify, render_template
+import sqlite3
+import json
+import pandas as pd
+import plotly.express as px
+
+app = Flask(__name__, template_folder="templates")
+DB_FILE = "uam.db"
+
+# ---------- Initialize Database ----------
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            hostname TEXT,
+            ip TEXT,
+            os TEXT,
+            user TEXT,
+            active_window TEXT,
+            cpu_percent REAL,
+            memory_percent REAL,
+            usb_devices TEXT,
+            recent_files TEXT,
+            browsing_activity TEXT,
+            monitoring_processes TEXT,
+            running_processes TEXT,
+            login_events TEXT
 # app.py
 """
 Server-Side Brain: Insider Threat Detection System
