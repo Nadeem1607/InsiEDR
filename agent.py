@@ -497,14 +497,6 @@ def run_agent():
         except Exception:
             # ensure we never crash
             pass
-        # send heartbeat less frequently (server may have separate endpoint)
-        if now - last_heartbeat >= HEARTBEAT_INTERVAL:
-            try:
-                hb_payload = {"agent_id": agent_id, "timestamp": payload["timestamp"], "heartbeat": payload["heartbeat"]}
-                send_payload(session, SERVER_URL, hb_payload)
-            except Exception:
-                pass
-            last_heartbeat = now
         # sleep with jitter to avoid synchronized spikes across many endpoints
         sleep_period = SEND_INTERVAL + (hash(agent_id) % 7)
         time.sleep(sleep_period)
