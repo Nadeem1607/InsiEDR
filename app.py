@@ -14,9 +14,25 @@ import sqlite3
 import hmac
 import hashlib
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template
+from functools import wraps
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from flask_socketio import SocketIO, emit
 from cryptography.fernet import Fernet
+from google.oauth2 import id_token
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport import requests as google_requests
+import pathlib
+
+# ML Model Integration
+try:
+    from ml_integration_simple import analyze_payload, get_detector
+    # Initialize with the model that matches agent's actual data collection
+    get_detector('model_available_features.pkl')
+    ML_ENABLED = True
+    print("[+] ML Model Integration Enabled (7 available features, 96.31% accuracy)")
+except Exception as e:
+    ML_ENABLED = False
+    print(f"[-] ML Model Integration Disabled: {e}")
 
 # --- CONFIGURATION ---
 # MUST match agent.py settings
@@ -28,9 +44,17 @@ FERNET_KEY = b'W-wbyxkNfYESAym-ldXduuQys7tNhf4fGj1RNxu1EC4='
 
 DB_FILE = "uam.db"
 
+# --- GOOGLE OAUTH CONFIGURATION ---
+CLIENT_SECRETS_FILE = "client_secret.json"
+SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+REDIRECT_URI = "http://localhost:5000/oauth/callback"
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'server_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Disable HTTPS requirement for local development (REMOVE IN PRODUCTION)
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 # --- DATABASE INIT ---
 def init_db():
@@ -56,7 +80,11 @@ def init_db():
             network_activity TEXT,    -- JSON
             email_activity TEXT,      -- JSON
             usb_devices TEXT,         -- JSON
-            psychometrics TEXT        -- JSON
+            psychometrics TEXT,       -- JSON
+            ml_prediction TEXT,       -- JSON: ML model prediction results
+            is_anomaly INTEGER,       -- 1 if anomaly detected, 0 otherwise
+            risk_score REAL,          -- ML risk score (0-100)
+            risk_level TEXT           -- Low/Medium/High
         )
     """)
     conn.commit()
@@ -90,6 +118,83 @@ def decrypt_payload(encrypted_bytes):
         print(f"[-] Decryption Failed: {e}")
         return None
 
+# --- OAUTH HELPERS ---
+
+def login_required(f):
+    """Decorator to protect routes that require authentication."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def get_google_flow():
+    """Creates OAuth flow object."""
+    flow = Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE,
+        scopes=SCOPES,
+        redirect_uri=REDIRECT_URI
+    )
+    return flow
+
+# --- OAUTH ROUTES ---
+
+@app.route('/login')
+def login():
+    """Displays login page (or redirects if already logged in)."""
+    if 'user' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('login.html')
+
+@app.route('/auth/google')
+def auth_google():
+    """Initiates Google OAuth login flow."""
+    flow = get_google_flow()
+    authorization_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true'
+    )
+    session['state'] = state
+    return redirect(authorization_url)
+
+@app.route('/oauth/callback')
+def oauth_callback():
+    """Handles OAuth callback from Google."""
+    try:
+        flow = get_google_flow()
+        flow.fetch_token(authorization_response=request.url)
+        
+        credentials = flow.credentials
+        request_session = google_requests.Request()
+        
+        # Verify the token and get user info
+        id_info = id_token.verify_oauth2_token(
+            credentials.id_token,
+            request_session,
+            flow.client_config['client_id']
+        )
+        
+        # Store user info in session
+        session['user'] = {
+            'email': id_info.get('email'),
+            'name': id_info.get('name'),
+            'picture': id_info.get('picture')
+        }
+        
+        print(f"[+] User logged in: {id_info.get('email')}")
+        return redirect(url_for('dashboard'))
+        
+    except Exception as e:
+        print(f"[-] OAuth callback error: {e}")
+        return jsonify({"status": "error", "message": "Authentication failed"}), 401
+
+@app.route('/logout')
+def logout():
+    """Logs out the user."""
+    session.clear()
+    return redirect(url_for('login'))
+
 # --- API: SECURE INGESTION ---
 
 @app.route('/api/logs', methods=['POST'])
@@ -118,7 +223,17 @@ def ingest_logs():
 
     # 3. Store Raw Telemetry
     try:
-        save_log(payload)
+        # Run ML prediction if enabled
+        ml_result = None
+        if ML_ENABLED:
+            try:
+                ml_result = analyze_payload(payload)
+                payload['ml_prediction'] = ml_result  # Add to payload for real-time stream
+                print(f"    ML Analysis: Risk={ml_result.get('risk_level')} Score={ml_result.get('risk_score'):.2f}")
+            except Exception as e:
+                print(f"    [-] ML Prediction failed: {e}")
+        
+        save_log(payload, ml_result)
         
         # 4. Real-Time Stream (The "Nervous System")
         # Send to dashboard immediately via WebSocket
@@ -130,7 +245,7 @@ def ingest_logs():
         print(f"[-] Storage Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-def save_log(data):
+def save_log(data, ml_result=None):
     """Maps the hierarchical JSON to flat SQL columns."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -139,13 +254,26 @@ def save_log(data):
     session = data.get("session", {})
     file_act = data.get("file_activity", {})
     
+    # Extract ML prediction fields
+    is_anomaly = 0
+    risk_score = 0.0
+    risk_level = "Unknown"
+    ml_prediction_json = None
+    
+    if ml_result:
+        is_anomaly = 1 if ml_result.get('is_anomaly', False) else 0
+        risk_score = ml_result.get('risk_score', 0.0)
+        risk_level = ml_result.get('risk_level', 'Unknown')
+        ml_prediction_json = json.dumps(ml_result)
+    
     c.execute("""
         INSERT INTO logs (
             server_received_at, timestamp, agent_id, hostname, user, os,
             session_status, idle_seconds, 
             risk_files_count, risk_files_data, disk_io_data,
-            network_activity, email_activity, usb_devices, psychometrics
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            network_activity, email_activity, usb_devices, psychometrics,
+            ml_prediction, is_anomaly, risk_score, risk_level
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         datetime.utcnow().isoformat(),
         data.get("timestamp"),
@@ -161,7 +289,11 @@ def save_log(data):
         json.dumps(data.get("network_activity", {})),
         json.dumps(data.get("email_activity", {})),
         json.dumps(data.get("usb_devices", [])),
-        json.dumps(data.get("psychometrics_proxy", {}))
+        json.dumps(data.get("psychometrics_proxy", {})),
+        ml_prediction_json,
+        is_anomaly,
+        risk_score,
+        risk_level
     ))
     conn.commit()
     conn.close()
@@ -237,10 +369,77 @@ def get_user_baseline(user):
         }
     })
 
+@app.route('/api/anomalies', methods=['GET'])
+def get_anomalies():
+    """Get detected anomalies with ML predictions."""
+    try:
+        limit = int(request.args.get('limit', 50))
+        min_risk = float(request.args.get('min_risk', 50.0))  # Default: Medium+ risk
+    except Exception:
+        limit = 50
+        min_risk = 50.0
+    
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    
+    query = """
+        SELECT * FROM logs 
+        WHERE is_anomaly = 1 AND risk_score >= ?
+        ORDER BY risk_score DESC, id DESC 
+        LIMIT ?
+    """
+    rows = conn.execute(query, (min_risk, limit)).fetchall()
+    conn.close()
+    
+    result = []
+    for r in rows:
+        row = dict(r)
+        # Parse JSON fields
+        if row.get('ml_prediction'):
+            row['ml_prediction'] = json.loads(row['ml_prediction'])
+        result.append(row)
+    
+    return jsonify({
+        "total": len(result),
+        "anomalies": result
+    })
+
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    """Get overall system statistics including ML metrics."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    stats = {}
+    
+    # Total logs
+    stats['total_logs'] = c.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+    
+    # Anomalies detected
+    stats['total_anomalies'] = c.execute("SELECT COUNT(*) FROM logs WHERE is_anomaly = 1").fetchone()[0]
+    
+    # Risk level breakdown
+    stats['risk_breakdown'] = {
+        'high': c.execute("SELECT COUNT(*) FROM logs WHERE risk_level = 'High'").fetchone()[0],
+        'medium': c.execute("SELECT COUNT(*) FROM logs WHERE risk_level = 'Medium'").fetchone()[0],
+        'low': c.execute("SELECT COUNT(*) FROM logs WHERE risk_level = 'Low'").fetchone()[0]
+    }
+    
+    # Average risk score
+    avg_risk = c.execute("SELECT AVG(risk_score) FROM logs WHERE risk_score > 0").fetchone()[0]
+    stats['avg_risk_score'] = round(avg_risk, 2) if avg_risk else 0.0
+    
+    # Active agents
+    stats['active_agents'] = c.execute("SELECT COUNT(DISTINCT agent_id) FROM logs").fetchone()[0]
+    
+    conn.close()
+    return jsonify(stats)
+
 # --- DASHBOARD (View) ---
 @app.route('/')
+@login_required
 def dashboard():
-    return render_template('dashboard.html') # You will use your existing dashboard.html here
+    return render_template('dashboard.html')
 
 if __name__ == '__main__':
     # Try to launch the Streamlit dashboard in the background (non-blocking)
