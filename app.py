@@ -23,7 +23,7 @@ from cryptography.fernet import Fernet
 HMAC_SECRET = os.getenv("AGENT_SECRET", "change_me_in_prod")
 # Load or set the SAME key used by the agent
 # In production, load this from a secure file
-FERNET_KEY = b'CHANGE_THIS_TO_MATCH_AGENT_KEY_IF_NEEDED' 
+FERNET_KEY = b'W-wbyxkNfYESAym-ldXduuQys7tNhf4fGj1RNxu1EC4=' 
 # Tip: For testing, you can copy the key generated in .uamhids_v3/fernet.key
 
 DB_FILE = "uam.db"
