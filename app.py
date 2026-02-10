@@ -190,7 +190,7 @@ def save_log(data, ml_result=None):
             ml_prediction, is_anomaly, risk_score, risk_level
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        datetime.utcnow().isoformat(),
+        datetime.now().astimezone().isoformat(),
         data.get("timestamp"),
         data.get("agent_id"),
         data.get("hostname"),
@@ -212,6 +212,21 @@ def save_log(data, ml_result=None):
     ))
     conn.commit()
     conn.close()
+
+
+@app.route('/api/server_tz', methods=['GET'])
+def server_tz():
+    """Return server timezone offset (minutes) and a human-readable offset string."""
+    now = datetime.now().astimezone()
+    utco = now.utcoffset()
+    offset_minutes = int(utco.total_seconds() / 60) if utco else 0
+    iso = now.isoformat()
+    offset_str = iso[-6:] if len(iso) >= 6 else '+00:00'
+    return jsonify({
+        'offset_minutes': offset_minutes,
+        'offset_str': offset_str,
+        'tz': str(now.tzinfo)
+    })
 
 # --- API: ANALYSIS INTERFACE (The Brain) ---
 

@@ -23,6 +23,23 @@
     <div class="container-fluid">
       <div class="row">
         <div class="col-md-8">
+          <h3>Risk Scores</h3>
+          <div class="card mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>Area graph of risk score changes by user</div>
+                <div>
+                  <select id="chart-limit" class="form-select w-auto d-inline-block">
+                    <option value="50">Last 50</option>
+                    <option value="100" selected>Last 100</option>
+                    <option value="250">Last 250</option>
+                    <option value="1000">All (1000)</option>
+                  </select>
+                </div>
+              </div>
+              <canvas id="risk-chart" style="height:240px; width:100%;"></canvas>
+            </div>
+          </div>
           <h3>Agents</h3>
           <div id="agents-table"></div>
 
@@ -74,6 +91,8 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
     <script>
       async function fetchJSON(path) {
         const res = await fetch(path);
@@ -101,7 +120,6 @@
           let body = '<pre style="white-space:pre-wrap;">';
           body += `ID: ${l.id}\nAgent: ${l.agent_id}\nOS: ${l.os}\nStatus: ${l.session_status}\nIdle: ${l.idle_seconds}\nRisk files: ${l.risk_files_count}\n`;
           body += `Risk level: ${l.risk_level || "N/A"}\nRisk score: ${l.risk_score ?? "N/A"}\nAnomaly: ${l.is_anomaly ? "Yes" : "No"}\n`;
-          // append JSON fields if present
           for (const k of [
             "risk_files_data",
             "disk_io_data",
@@ -127,9 +145,79 @@
         }
       }
 
+      // --- Risk chart ---
+      function colorForIndex(i) {
+        const hue = (i * 57) % 360; // spread hues
+        return `hsl(${hue} 70% 45%)`;
+      }
+
+      async function loadRiskChart() {
+        const limit = document.getElementById("chart-limit")?.value || 100;
+        const data = await fetchJSON("/api/logs?limit=" + limit);
+
+        const byUser = {};
+        for (const l of data) {
+          if (l.risk_score == null) continue;
+          const user = l.user || "unknown";
+          const ts = l.server_received_at || l.timestamp;
+          if (!ts) continue;
+          // Adjust timestamp so chart displays server-local time (not browser-local)
+          const serverOffset = window.serverOffsetMinutes ?? 0; // minutes ahead of UTC
+          const clientOffset = -new Date().getTimezoneOffset(); // minutes ahead of UTC
+          const shiftMs = (serverOffset - clientOffset) * 60_000;
+          const date = new Date(ts);
+          const when = new Date(date.getTime() + shiftMs);
+          byUser[user] = byUser[user] || [];
+          byUser[user].push({ x: when, y: Number(l.risk_score) });
+        }
+
+        const datasets = Object.keys(byUser).map((u, i) => {
+          const base = colorForIndex(i);
+          const bg = base.replace('hsl(', 'hsla(').replace(')', ' / 0.12)');
+          return {
+            label: u,
+            data: byUser[u].sort((a, b) => new Date(a.x) - new Date(b.x)),
+            borderColor: base,
+            backgroundColor: bg,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+            borderWidth: 2,
+          };
+        });
+
+        const ctx = document.getElementById('risk-chart').getContext('2d');
+        if (window.riskChart) {
+          window.riskChart.data.datasets = datasets;
+          window.riskChart.update();
+        } else {
+          window.riskChart = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+              interaction: { mode: 'nearest', intersect: false },
+              plugins: { legend: { position: 'top' } },
+              scales: {
+                x: {
+                  type: 'time',
+                  time: { unit: 'minute', tooltipFormat: 'PPpp' },
+                  title: { display: false },
+                },
+                y: {
+                  beginAtZero: true,
+                  suggestedMax: 100,
+                  title: { display: true, text: 'Risk Score' },
+                },
+              },
+            },
+          });
+        }
+      }
+
       document.getElementById("refresh-btn").addEventListener("click", () => {
         loadAgents();
         loadLogs();
+        loadRiskChart();
       });
       document
         .getElementById("baseline-btn")
@@ -151,6 +239,7 @@
             autoTimer = setInterval(() => {
               loadAgents();
               loadLogs();
+              loadRiskChart();
             }, 2000);
           } else {
             clearInterval(autoTimer);
@@ -158,9 +247,26 @@
           }
         });
 
-      // initial load
-      loadAgents();
-      loadLogs();
+      document.getElementById('chart-limit')?.addEventListener('change', () => loadRiskChart());
+
+      async function fetchServerTZ() {
+        try {
+          const info = await fetchJSON('/api/server_tz');
+          // Python returns minutes ahead of UTC (e.g., 60 for +01:00)
+          window.serverOffsetMinutes = info.offset_minutes ?? 0;
+          window.serverOffsetStr = info.offset_str ?? '+00:00';
+        } catch (e) {
+          window.serverOffsetMinutes = 0;
+          window.serverOffsetStr = '+00:00';
+        }
+      }
+
+      // initial load: fetch server tz then load data so chart uses server local time
+      fetchServerTZ().then(() => {
+        loadAgents();
+        loadLogs();
+        loadRiskChart();
+      });
     </script>
   </body>
 </html>
