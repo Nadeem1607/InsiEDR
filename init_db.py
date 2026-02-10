@@ -46,7 +46,11 @@ def init_db():
             network_activity TEXT,     -- JSON: Live IPs + Volume
             email_activity TEXT,       -- JSON: SMTP/IMAP usage
             usb_devices TEXT,          -- JSON: USB events
-            psychometrics TEXT         -- JSON: Workload proxy
+            psychometrics TEXT,         -- JSON: Workload proxy
+            ml_prediction TEXT,       -- JSON: ML model prediction results
+            is_anomaly INTEGER,       -- 1 if anomaly detected, 0 otherwise
+            risk_score REAL,          -- ML risk score (0-100)
+            risk_level TEXT           -- Low/Medium/High
         )
     """)
     print("✅ OK")

@@ -14,14 +14,9 @@ import sqlite3
 import hmac
 import hashlib
 from datetime import datetime
-from functools import wraps
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
 from cryptography.fernet import Fernet
-from google.oauth2 import id_token
-from google_auth_oauthlib.flow import Flow
-from google.auth.transport import requests as google_requests
-import pathlib
 
 # ML Model Integration
 try:
@@ -44,17 +39,9 @@ FERNET_KEY = b'W-wbyxkNfYESAym-ldXduuQys7tNhf4fGj1RNxu1EC4='
 
 DB_FILE = "uam.db"
 
-# --- GOOGLE OAUTH CONFIGURATION ---
-CLIENT_SECRETS_FILE = "client_secret.json"
-SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
-REDIRECT_URI = "http://localhost:5000/oauth/callback"
-
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'server_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*")
-
-# Disable HTTPS requirement for local development (REMOVE IN PRODUCTION)
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 # --- DATABASE INIT ---
 def init_db():
@@ -85,6 +72,7 @@ def init_db():
             is_anomaly INTEGER,       -- 1 if anomaly detected, 0 otherwise
             risk_score REAL,          -- ML risk score (0-100)
             risk_level TEXT           -- Low/Medium/High
+            
         )
     """)
     conn.commit()
@@ -118,83 +106,6 @@ def decrypt_payload(encrypted_bytes):
         print(f"[-] Decryption Failed: {e}")
         return None
 
-# --- OAUTH HELPERS ---
-
-def login_required(f):
-    """Decorator to protect routes that require authentication."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def get_google_flow():
-    """Creates OAuth flow object."""
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
-        scopes=SCOPES,
-        redirect_uri=REDIRECT_URI
-    )
-    return flow
-
-# --- OAUTH ROUTES ---
-
-@app.route('/login')
-def login():
-    """Displays login page (or redirects if already logged in)."""
-    if 'user' in session:
-        return redirect(url_for('dashboard'))
-    return render_template('login.html')
-
-@app.route('/auth/google')
-def auth_google():
-    """Initiates Google OAuth login flow."""
-    flow = get_google_flow()
-    authorization_url, state = flow.authorization_url(
-        access_type='offline',
-        include_granted_scopes='true'
-    )
-    session['state'] = state
-    return redirect(authorization_url)
-
-@app.route('/oauth/callback')
-def oauth_callback():
-    """Handles OAuth callback from Google."""
-    try:
-        flow = get_google_flow()
-        flow.fetch_token(authorization_response=request.url)
-        
-        credentials = flow.credentials
-        request_session = google_requests.Request()
-        
-        # Verify the token and get user info
-        id_info = id_token.verify_oauth2_token(
-            credentials.id_token,
-            request_session,
-            flow.client_config['client_id']
-        )
-        
-        # Store user info in session
-        session['user'] = {
-            'email': id_info.get('email'),
-            'name': id_info.get('name'),
-            'picture': id_info.get('picture')
-        }
-        
-        print(f"[+] User logged in: {id_info.get('email')}")
-        return redirect(url_for('dashboard'))
-        
-    except Exception as e:
-        print(f"[-] OAuth callback error: {e}")
-        return jsonify({"status": "error", "message": "Authentication failed"}), 401
-
-@app.route('/logout')
-def logout():
-    """Logs out the user."""
-    session.clear()
-    return redirect(url_for('login'))
-
 # --- API: SECURE INGESTION ---
 
 @app.route('/api/logs', methods=['POST'])
@@ -202,24 +113,28 @@ def ingest_logs():
     """
     Main Gateway: Receives, Verifies, Decrypts, Stores.
     """
-    # 1. Verify Integrity
-    sig = request.headers.get('X-PAYLOAD-SIGNATURE')
-    if not verify_hmac(request.data, sig):
-        return jsonify({"status": "error", "message": "Integrity Check Failed"}), 401
-
-    # 2. Decrypt Payload
-    # Agent sends raw bytes; Flask request.data gives us that
-    payload = decrypt_payload(request.data)
+    # 1. Check if plain JSON or encrypted
+    content_type = request.headers.get('Content-Type', '')
     
-    # Fallback: If agent sent plain JSON (during early debug), accept it
-    if payload is None:
+    if 'application/json' in content_type:
+        # Plain JSON mode (encryption disabled)
         try:
             payload = request.get_json()
-        except:
-            return jsonify({"status": "error", "message": "Invalid Payload"}), 400
-
-    if not payload:
-        return jsonify({"status": "error", "message": "Decryption Failed"}), 400
+            if not payload:
+                return jsonify({"status": "error", "message": "Empty Payload"}), 400
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"Invalid JSON: {e}"}), 400
+    else:
+        # Encrypted mode
+        # 1. Verify Integrity
+        sig = request.headers.get('X-PAYLOAD-SIGNATURE')
+        if not verify_hmac(request.data, sig):
+            return jsonify({"status": "error", "message": "Integrity Check Failed"}), 401
+        
+        payload = decrypt_payload(request.data)
+        
+        if not payload:
+            return jsonify({"status": "error", "message": "Decryption Failed"}), 400
 
     # 3. Store Raw Telemetry
     try:
@@ -437,7 +352,6 @@ def get_stats():
 
 # --- DASHBOARD (View) ---
 @app.route('/')
-@login_required
 def dashboard():
     return render_template('dashboard.html')
 
