@@ -14,7 +14,7 @@ Security features:
 import os, sys, json, time, socket, platform, tempfile, shutil, sqlite3, uuid, re, stat
 from datetime import datetime, timezone
 import psutil, requests, pytz
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 from hashlib import sha256, sha1, sha512, pbkdf2_hmac
 import hmac
 import base64
@@ -23,11 +23,10 @@ from PIL import ImageGrab  # optional, used safely
 TIMEZONE = os.getenv("AGENT_TIMEZONE", "Asia/Kolkata")
 
 # CONFIG via environment (preferred) with safe defaults for testing
-SERVER_URL = os.getenv("AGENT_SERVER", "https://127.0.0.1:5000/api/logs")
+SERVER_URL = os.getenv("AGENT_SERVER", "http://172.16.13.100:5000/api/logs")
 API_KEY = os.getenv("AGENT_APIKEY", "")
 HMAC_SECRET = os.getenv("AGENT_SECRET", "")  # MUST be set in prod and rotated
 SEND_INTERVAL = int(os.getenv("AGENT_INTERVAL", "30"))
-HEARTBEAT_INTERVAL = int(os.getenv("AGENT_HEARTBEAT_INTERVAL", "60"))
 
 # Limits to avoid sending huge payloads
 MAX_RECENT_FILES = 5
@@ -116,9 +115,8 @@ def init_queue_db():
 init_queue_db()
 
 def enqueue_payload(payload_json):
+    # Store as plain JSON (no encryption for simplicity)
     data_bytes = payload_json.encode()
-    if FERNET:
-        data_bytes = FERNET.encrypt(data_bytes)
     conn = sqlite3.connect(QUEUE_DB, timeout=10)
     c = conn.cursor()
     c.execute("INSERT INTO queue (created_at, payload) VALUES (?, ?)", (datetime.now(timezone.utc).isoformat(), data_bytes))
@@ -132,20 +130,24 @@ def dequeue_and_send_all(session, url, headers):
     rows = c.fetchall()
     for rid, blob in rows:
         try:
-            if FERNET:
-                raw = FERNET.decrypt(blob)
-            else:
-                raw = blob
-            payload = raw.decode()
+            # Read plain JSON from queue
+            payload_json = blob.decode('utf-8')
+            
+            # Send as plain JSON (no encryption)
+            payload_bytes = payload_json.encode('utf-8')
+            
+            # Update signature
+            sig = sign_payload(payload_bytes)
+            headers_copy = headers.copy()
+            headers_copy["Content-Type"] = "application/json"
+            if sig:
+                headers_copy["X-PAYLOAD-SIGNATURE"] = sig
+            
             # attempt send
-            success = send_with_retry(session, url, headers, payload_json=payload)
+            success = send_with_retry(session, url, headers_copy, payload_bytes)
             if success:
                 c.execute("DELETE FROM queue WHERE id = ?", (rid,))
                 conn.commit()
-        except InvalidToken:
-            # cannot decrypt - skip or log
-            c.execute("DELETE FROM queue WHERE id = ?", (rid,))
-            conn.commit()
         except Exception:
             # stop trying further in this run
             break
@@ -163,12 +165,12 @@ def sign_payload(payload_bytes):
     return sig
 
 # --- Transport helper with retries + exponential backoff ---
-def send_with_retry(session, url, headers, payload_json, max_attempts=4):
+def send_with_retry(session, url, headers, payload_bytes, max_attempts=4):
     backoff = 1.0
     for attempt in range(1, max_attempts + 1):
         try:
             # Use session.post for keep-alive, verify True for TLS verification
-            r = session.post(url, data=payload_json.encode('utf-8'), headers=headers, timeout=8, verify=True)
+            r = session.post(url, data=payload_bytes, headers=headers, timeout=8, verify=True)
             if 200 <= r.status_code < 300:
                 return True
             # treat 4xx as non-retryable except 429
@@ -206,28 +208,6 @@ def get_active_window():
         return truncate(win32gui.GetWindowText(win), 200)
     except Exception:
         return "unknown"
-
-def collect_heartbeat():
-    # brief cpu sample, defensive
-    try:
-        psutil.cpu_percent(interval=None)
-        cpu = psutil.cpu_percent(interval=1)
-    except Exception:
-        cpu = 0.0
-    mem = psutil.virtual_memory().percent if hasattr(psutil, "virtual_memory") else 0.0
-    try:
-        disk = psutil.disk_usage("/").percent
-    except Exception:
-        disk = 0.0
-    tz = pytz.timezone(TIMEZONE)
-    return {
-        "timestamp": datetime.now(tz).isoformat(),
-        "agent_id": get_agent_id(),
-        "hostname": truncate(platform.node(), 100),
-        "cpu_percent": round(float(cpu), 2),
-        "memory_percent": round(float(mem), 2),
-        "disk_percent": round(float(disk), 2)
-    }
 
 # File scanning (lightweight, truncated)
 SUSPICIOUS_KEYWORDS = ["secret", "confidential", "salary", "database", "credential", "password", "key", "internal"]
@@ -405,26 +385,134 @@ def take_screenshot():
     except Exception:
         return None
 
+# Collect email activity from Outlook
+def get_outlook_counts():
+    """
+    Returns (sent_count, recv_count) from Outlook folders.
+    Only counts emails from today to avoid performance issues.
+    Falls back to 0 if Outlook is not running or accessible.
+    """
+    try:
+        import win32com.client
+        from datetime import date
+        
+        outlook = win32com.client.Dispatch("Outlook.Application")
+        namespace = outlook.GetNamespace("MAPI")
+        
+        today = date.today()
+        today = date.today()
+        sent_count = 0
+        recv_count = 0
+        
+        # Get Sent Items folder (olFolderSentMail = 5)
+        sent_folder = namespace.GetDefaultFolder(5)
+        sent_items = sent_folder.Items
+        sent_items.Sort("[ReceivedTime]", True)  # Sort by date descending
+        
+        # Count sent emails from today
+        for item in sent_items:
+            try:
+                if hasattr(item, 'SentOn'):
+                    sent_date = item.SentOn.date() if hasattr(item.SentOn, 'date') else None
+                    if sent_date == today:
+                        sent_count += 1
+                    elif sent_date and sent_date < today:
+                        break  # Stop when we hit older emails
+            except Exception:
+                continue
+        
+        # Get Inbox folder (olFolderInbox = 6)
+        inbox_folder = namespace.GetDefaultFolder(6)
+        inbox_items = inbox_folder.Items
+        inbox_items.Sort("[ReceivedTime]", True)
+        
+        # Count received emails from today
+        for item in inbox_items:
+            try:
+                if hasattr(item, 'ReceivedTime'):
+                    recv_date = item.ReceivedTime.date() if hasattr(item.ReceivedTime, 'date') else None
+                    if recv_date == today:
+                        recv_count += 1
+                    elif recv_date and recv_date < today:
+                        break
+            except Exception:
+                continue
+        return sent_count, recv_count
+    except Exception:
+        # Outlook not running or not installed
+        return 0, 0
+
 # Build the payload (minimal PII; truncated fields)
 def build_payload():
     tz = pytz.timezone(TIMEZONE)
-    heartbeat = collect_heartbeat()
+    
+    # Gather disk I/O metrics (simplified for demo)
+    try:
+        disk_io_stat = psutil.disk_io_counters()
+        disk_read_mb = (disk_io_stat.read_bytes or 0) / (1024 ** 2)
+        disk_write_mb = (disk_io_stat.write_bytes or 0) / (1024 ** 2)
+    except Exception:
+        disk_read_mb = 0
+        disk_write_mb = 0
+    
+    # Gather network metrics
+    try:
+        net_io_stat = psutil.net_io_counters()
+        network_bytes_sent = net_io_stat.bytes_sent or 0
+        network_bytes_recv = net_io_stat.bytes_recv or 0
+    except Exception:
+        network_bytes_sent = 0
+        network_bytes_recv = 0
+    
+    # Collect email activity from Outlook
+    email_sent, email_recv = get_outlook_counts()
+    
+    # Build structured payload for ML model compatibility
     pl = {
         "timestamp": datetime.now(tz).isoformat(),
         "agent_id": get_agent_id(),
-        "hostname": heartbeat.get("hostname"),
+        "hostname": truncate(platform.node(), 100),
         "ip": None,
-        "os_name": platform.system(),
+        "os": platform.system(),
         "os_version": truncate(platform.platform(), 120),
         "status": "online",
-        "user": truncate(safe_getlogin(), 80),
-        "heartbeat": heartbeat,
-        # limited items below
+        
+        # Session/User metrics (for ML model)
+        "session": {
+            "user": truncate(safe_getlogin(), 80),
+            "status": "active",
+            "idle_seconds": 0  # Would calculate from actual idle time
+        },
+        
+        # File activity (for ML model)
+        "file_activity": {
+            "risk_files_surface": detect_unusual_files(),
+            "disk_io": {
+                "read_mb": round(disk_read_mb, 2),
+                "write_mb": round(disk_write_mb, 2)
+            }
+        },
+        
+        # Network activity (for ML model)
+        "network_activity": {
+            "bytes_sent": int(network_bytes_sent),
+            "bytes_recv": int(network_bytes_recv),
+            "active_connections": len([c for c in psutil.net_connections(kind='inet') if c.status == 'ESTABLISHED'])
+        },
+        
+        # Email activity (for ML model)
+        "email_activity": {
+            "sent_count": email_sent,
+            "recv_count": email_recv
+        },
+        
+        # USB devices (for ML model)
+        "usb_devices": check_usb_devices(),
+        
+        # Additional telemetry
         "active_window": truncate(get_active_window(), 200),
-        "unusual_files": detect_unusual_files(),
         "browsers_installed": detect_browsers(),
         "recent_browsing": [],
-        "usb_devices": check_usb_devices(),
         "login_events": get_login_events()
     }
     # ip get - non-blocking
@@ -457,7 +545,11 @@ def send_payload(session, endpoint, payload_obj):
         payload_obj["recent_browsing"] = payload_obj.get("recent_browsing", [])[:3]
         payload_obj["unusual_files"] = payload_obj.get("unusual_files", [])[:3]
         payload_json = json.dumps(payload_obj, separators=(",", ":"), ensure_ascii=False)
-    sig = sign_payload(payload_json.encode('utf-8'))
+    
+    # Send as JSON (encryption disabled for testing)
+    payload_bytes = payload_json.encode('utf-8')
+    
+    sig = sign_payload(payload_bytes)
     headers = {
         "Content-Type": "application/json",
     }
@@ -467,7 +559,7 @@ def send_payload(session, endpoint, payload_obj):
         headers["X-PAYLOAD-SIGNATURE"] = sig
 
     # attempt send with retry; if fails, enqueue encrypted payload
-    ok = send_with_retry(session, endpoint, headers, payload_json)
+    ok = send_with_retry(session, endpoint, headers, payload_bytes)
     if not ok:
         try:
             enqueue_payload(payload_json)
@@ -486,10 +578,8 @@ def run_agent():
     session = requests.Session()
     session.headers.update({"User-Agent": "UAM-Agent/1.0"})
     agent_id = get_agent_id()
-    last_heartbeat = 0
     print("Agent ready, id:", agent_id)
     while True:
-        now = time.time()
         payload = build_payload()
         # send main logs endpoint
         try:
@@ -497,14 +587,6 @@ def run_agent():
         except Exception:
             # ensure we never crash
             pass
-        # send heartbeat less frequently (server may have separate endpoint)
-        if now - last_heartbeat >= HEARTBEAT_INTERVAL:
-            try:
-                hb_payload = {"agent_id": agent_id, "timestamp": payload["timestamp"], "heartbeat": payload["heartbeat"]}
-                send_payload(session, SERVER_URL, hb_payload)
-            except Exception:
-                pass
-            last_heartbeat = now
         # sleep with jitter to avoid synchronized spikes across many endpoints
         sleep_period = SEND_INTERVAL + (hash(agent_id) % 7)
         time.sleep(sleep_period)

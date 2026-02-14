@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InsiEDR Dashboard</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+      <div class="container-fluid">
+        <span class="navbar-brand">🔒 InsiEDR Dashboard</span>
+      </div>
+    </nav>
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-md-8">
+          <h3>Risk Scores</h3>
+          <div class="card mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>Area graph of risk score changes by user</div>
+                <div>
+                  <select id="chart-limit" class="form-select w-auto d-inline-block">
+                    <option value="50">Last 50</option>
+                    <option value="100" selected>Last 100</option>
+                    <option value="250">Last 250</option>
+                    <option value="1000">All (1000)</option>
+                  </select>
+                </div>
+              </div>
+              <canvas id="risk-chart" style="height:240px; width:100%;"></canvas>
+            </div>
+          </div>
+          <h3>Agents</h3>
+          <div id="agents-table"></div>
+
+          <h3 class="mt-4">Latest Logs</h3>
+          <div class="mb-2">
+            <label>Show last:</label>
+            <select id="log-limit" class="form-select w-auto d-inline-block">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <button id="refresh-btn" class="btn btn-primary btn-sm ms-2">
+              Refresh
+            </button>
+            <input
+              type="checkbox"
+              id="auto-refresh"
+              class="form-check-input ms-3"
+            />
+            <label for="auto-refresh">Auto-refresh (2s)</label>
+          </div>
+          <div id="logs"></div>
+        </div>
+        <div class="col-md-4">
+          <h4>Baseline / Analysis</h4>
+          <div class="mb-2">
+            <input
+              id="baseline-user"
+              class="form-control"
+              placeholder="Username"
+            />
+            <button id="baseline-btn" class="btn btn-secondary btn-sm mt-2">
+              Get Baseline
+            </button>
+          </div>
+          <pre
+            id="baseline-output"
+            style="
+              height: 300px;
+              overflow: auto;
+              background: #f8f9fa;
+              padding: 10px;
+            "
+          ></pre>
+          <hr />
+          <div>DB file: <strong>uam.db</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+    <script>
+      async function fetchJSON(path) {
+        const res = await fetch(path);
+        return await res.json();
+      }
+
+      async function loadAgents() {
+        const data = await fetchJSON("/api/agents");
+        let html =
+          '<table class="table table-sm"><thead><tr><th>Agent ID</th><th>Host</th><th>User</th><th>Last Seen</th><th>Status</th></tr></thead><tbody>';
+        for (const a of data) {
+          html += `<tr><td>${a.agent_id}</td><td>${a.hostname}</td><td>${a.user}</td><td>${a.last_seen}</td><td>${a.status}</td></tr>`;
+        }
+        html += "</tbody></table>";
+        document.getElementById("agents-table").innerHTML = html;
+      }
+
+      async function loadLogs() {
+        const limit = document.getElementById("log-limit").value;
+        const data = await fetchJSON("/api/logs?limit=" + limit);
+        const container = document.getElementById("logs");
+        container.innerHTML = "";
+        for (const l of data) {
+          const header = `<div class="card mb-2"><div class="card-body"><h6>${l.hostname} — ${l.user} — ${l.timestamp || l.server_received_at}</h6>`;
+          let body = '<pre style="white-space:pre-wrap;">';
+          body += `ID: ${l.id}\nAgent: ${l.agent_id}\nOS: ${l.os}\nStatus: ${l.session_status}\nIdle: ${l.idle_seconds}\nRisk files: ${l.risk_files_count}\n`;
+          body += `Risk level: ${l.risk_level || "N/A"}\nRisk score: ${l.risk_score ?? "N/A"}\nAnomaly: ${l.is_anomaly ? "Yes" : "No"}\n`;
+          for (const k of [
+            "risk_files_data",
+            "disk_io_data",
+            "network_activity",
+            "email_activity",
+            "usb_devices",
+            "psychometrics",
+            "ml_prediction",
+          ]) {
+            if (l[k]) {
+              try {
+                body +=
+                  `\n--- ${k} ---\n` +
+                  JSON.stringify(JSON.parse(l[k]), null, 2) +
+                  "\n";
+              } catch (e) {
+                body += `\n--- ${k} ---\n` + l[k] + "\n";
+              }
+            }
+          }
+          body += "</pre></div></div>";
+          container.innerHTML += header + body;
+        }
+      }
+
+      // --- Risk chart ---
+      function colorForIndex(i) {
+        const hue = (i * 57) % 360; // spread hues
+        return `hsl(${hue} 70% 45%)`;
+      }
+
+      async function loadRiskChart() {
+        const limit = document.getElementById("chart-limit")?.value || 100;
+        const data = await fetchJSON("/api/logs?limit=" + limit);
+
+        const byUser = {};
+        for (const l of data) {
+          if (l.risk_score == null) continue;
+          const user = l.user || "unknown";
+          const ts = l.server_received_at || l.timestamp;
+          if (!ts) continue;
+          // Adjust timestamp so chart displays server-local time (not browser-local)
+          const serverOffset = window.serverOffsetMinutes ?? 0; // minutes ahead of UTC
+          const clientOffset = -new Date().getTimezoneOffset(); // minutes ahead of UTC
+          const shiftMs = (serverOffset - clientOffset) * 60_000;
+          const date = new Date(ts);
+          const when = new Date(date.getTime() + shiftMs);
+          byUser[user] = byUser[user] || [];
+          byUser[user].push({ x: when, y: Number(l.risk_score) });
+        }
+
+        const datasets = Object.keys(byUser).map((u, i) => {
+          const base = colorForIndex(i);
+          const bg = base.replace('hsl(', 'hsla(').replace(')', ' / 0.12)');
+          return {
+            label: u,
+            data: byUser[u].sort((a, b) => new Date(a.x) - new Date(b.x)),
+            borderColor: base,
+            backgroundColor: bg,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+            borderWidth: 2,
+          };
+        });
+
+        const ctx = document.getElementById('risk-chart').getContext('2d');
+        if (window.riskChart) {
+          window.riskChart.data.datasets = datasets;
+          window.riskChart.update();
+        } else {
+          window.riskChart = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+              interaction: { mode: 'nearest', intersect: false },
+              plugins: { legend: { position: 'top' } },
+              scales: {
+                x: {
+                  type: 'time',
+                  time: { unit: 'minute', tooltipFormat: 'PPpp' },
+                  title: { display: false },
+                },
+                y: {
+                  beginAtZero: true,
+                  suggestedMax: 100,
+                  title: { display: true, text: 'Risk Score' },
+                },
+              },
+            },
+          });
+        }
+      }
+
+      document.getElementById("refresh-btn").addEventListener("click", () => {
+        loadAgents();
+        loadLogs();
+        loadRiskChart();
+      });
+      document
+        .getElementById("baseline-btn")
+        .addEventListener("click", async () => {
+          const user = document.getElementById("baseline-user").value.trim();
+          if (!user) return;
+          const data = await fetchJSON(
+            "/api/baseline/" + encodeURIComponent(user),
+          );
+          document.getElementById("baseline-output").textContent =
+            JSON.stringify(data, null, 2);
+        });
+
+      let autoTimer = null;
+      document
+        .getElementById("auto-refresh")
+        .addEventListener("change", function () {
+          if (this.checked) {
+            autoTimer = setInterval(() => {
+              loadAgents();
+              loadLogs();
+              loadRiskChart();
+            }, 2000);
+          } else {
+            clearInterval(autoTimer);
+            autoTimer = null;
+          }
+        });
+
+      document.getElementById('chart-limit')?.addEventListener('change', () => loadRiskChart());
+
+      async function fetchServerTZ() {
+        try {
+          const info = await fetchJSON('/api/server_tz');
+          // Python returns minutes ahead of UTC (e.g., 60 for +01:00)
+          window.serverOffsetMinutes = info.offset_minutes ?? 0;
+          window.serverOffsetStr = info.offset_str ?? '+00:00';
+        } catch (e) {
+          window.serverOffsetMinutes = 0;
+          window.serverOffsetStr = '+00:00';
+        }
+      }
+
+      // initial load: fetch server tz then load data so chart uses server local time
+      fetchServerTZ().then(() => {
+        loadAgents();
+        loadLogs();
+        loadRiskChart();
+      });
+    </script>
+  </body>
+</html>
