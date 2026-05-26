@@ -1,0 +1,13 @@
+## Phase 2 — Computed Meta-Features
+
+> These are **not raw CERT features** — they are computed rolling-window analytics derived from the behavioral features above. Listed separately because they are agent-computed, not telemetry collection items.
+
+| S.No. | Derived Feature | Computed From | Description | Captured(Y/N) | Confidence | Telemetry Source / Technical Reason | Scenario Relevance |
+|---|---|---|---|---|---|---|---|
+| 58 | daily_files_to_removable_7d_sum | Computed | 7-day cumulative removable media file transfers | Yes | 100% | Rolling SUM over daily_files_to_removable_count — pure computation on existing features | S1, S2 |
+| 59 | daily_risk_delta | Computed | Change in composite risk score vs previous day | Yes | 100% | Composite risk[today] - risk[yesterday] — agent-computed analytics | All |
+| 60 | daily_risk_rolling_mean_7d | Computed | 7-day average composite risk score | Yes | 100% | Rolling MEAN over daily_risk_delta — pure computation | All |
+| 61 | daily_risk_rolling_std_7d | Computed | 7-day risk score variability | Yes | 100% | Rolling STD over daily_risk_delta — pure computation | All |
+
+> **Note**: `daily_external_email_volume_7d_sum` from Phase 2 spec is **excluded** from all counts — requires email data which is out of scope.
+> **Note**: `daily_files_to_removable_7d_sum` appears only here (not in Device section) to avoid double-counting.

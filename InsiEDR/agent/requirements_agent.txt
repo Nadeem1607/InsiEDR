@@ -1,0 +1,5 @@
+cryptography>=42.0
+requests>=2.31
+psutil>=5.9
+watchdog>=3.0
+pywin32>=306; platform_system=="Windows"
