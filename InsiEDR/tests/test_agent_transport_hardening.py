@@ -24,6 +24,11 @@ class RecordingSession:
         return self.responses.pop(0)
 
 
+class FalsyRecordingSession(RecordingSession):
+    def __bool__(self):
+        return False
+
+
 def _envelope(payload_id="p1"):
     return {"scheme": "aes-256-gcm", "nonce": "n", "ciphertext": "c", "payload_id": payload_id}
 
@@ -116,3 +121,13 @@ def test_retry_success_deletes_each_sent_payload_once(tmp_path):
     assert summary == {"attempted": 2, "sent": 2, "retained": 0}
     assert len(session.calls) == 2
     assert queue.count() == 0
+
+
+def test_explicit_falsy_session_is_used_for_dependency_injection(tmp_path):
+    session = FalsyRecordingSession([Response(204)])
+    transport = TelemetryTransport(server_url="https://server.example/api/logs", queue=LocalEncryptedQueue(tmp_path), session=session)
+
+    result = transport.send_encrypted(_envelope(), {})
+
+    assert result.ok
+    assert len(session.calls) == 1

@@ -21,8 +21,9 @@ def b64encode(data: bytes) -> str:
 
 def b64decode(data: str) -> bytes:
     try:
-        return base64.urlsafe_b64decode(data.encode("ascii"))
-    except (binascii.Error, UnicodeEncodeError) as exc:
+        encoded = data.encode("ascii")
+        return base64.b64decode(encoded, altchars=b"-_", validate=True)
+    except (binascii.Error, UnicodeEncodeError, ValueError) as exc:
         raise CryptoConfigError("value is not valid URL-safe base64") from exc
 
 
@@ -32,10 +33,10 @@ def _decode_candidate(value: str) -> bytes:
         raise CryptoConfigError("encryption key is empty")
 
     try:
-        raw = base64.urlsafe_b64decode(stripped.encode("ascii"))
+        raw = b64decode(stripped)
         if len(raw) == AES_GCM_KEY_BYTES:
             return raw
-    except (binascii.Error, UnicodeEncodeError):
+    except CryptoConfigError:
         pass
 
     try:

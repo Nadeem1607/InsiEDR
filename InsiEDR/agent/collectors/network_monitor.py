@@ -18,6 +18,39 @@ def _safe_net_connections() -> list[Any]:
         return []
 
 
+def _safe_net_if_addrs() -> dict[str, list[Any]]:
+    try:
+        return psutil.net_if_addrs()
+    except (psutil.AccessDenied, PermissionError, OSError, AttributeError):
+        return {}
+
+
+def _address_family_name(family: Any) -> str:
+    family_value = getattr(family, "name", str(family))
+    if family_value in {"AF_INET", str(socket.AF_INET)}:
+        return "ipv4"
+    if family_value in {"AF_INET6", str(socket.AF_INET6)}:
+        return "ipv6"
+    if "PACKET" in family_value or "LINK" in family_value:
+        return "link"
+    return family_value.lower()
+
+
+def _interface_addresses(addrs: dict[str, list[Any]], name: str) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for addr in addrs.get(name, []):
+        summaries.append(
+            {
+                "family": _address_family_name(getattr(addr, "family", "")),
+                "address": str(getattr(addr, "address", "") or ""),
+                "netmask": str(getattr(addr, "netmask", "") or ""),
+                "broadcast": str(getattr(addr, "broadcast", "") or ""),
+                "ptp": str(getattr(addr, "ptp", "") or ""),
+            }
+        )
+    return summaries
+
+
 def _connection_counts(connections: list[Any]) -> dict[str, int]:
     established = listening = loopback = 0
     remote_addresses: set[str] = set()
@@ -29,7 +62,12 @@ def _connection_counts(connections: list[Any]) -> dict[str, int]:
             established += 1
         if status == "LISTEN":
             listening += 1
-        if local and getattr(local, "ip", "") in {"127.0.0.1", "::1"}:
+        if (
+            local
+            and getattr(local, "ip", "") in {"127.0.0.1", "::1"}
+            or remote
+            and getattr(remote, "ip", "") in {"127.0.0.1", "::1"}
+        ):
             loopback += 1
         if remote and getattr(remote, "ip", ""):
             remote_addresses.add(str(remote.ip))
@@ -45,6 +83,7 @@ def _connection_counts(connections: list[Any]) -> dict[str, int]:
 def _interface_summaries() -> list[dict[str, Any]]:
     stats = psutil.net_if_stats()
     counters = psutil.net_io_counters(pernic=True)
+    addresses = _safe_net_if_addrs()
     summaries: list[dict[str, Any]] = []
     for name, stat in sorted(stats.items()):
         io = counters.get(name)
@@ -58,6 +97,13 @@ def _interface_summaries() -> list[dict[str, Any]]:
                 "bytes_recv": int(getattr(io, "bytes_recv", 0) if io else 0),
                 "packets_sent": int(getattr(io, "packets_sent", 0) if io else 0),
                 "packets_recv": int(getattr(io, "packets_recv", 0) if io else 0),
+                "errors_in": int(getattr(io, "errin", 0) if io else 0),
+                "errors_out": int(getattr(io, "errout", 0) if io else 0),
+                "dropin": int(getattr(io, "dropin", 0) if io else 0),
+                "dropout": int(getattr(io, "dropout", 0) if io else 0),
+                "duplex": str(getattr(stat, "duplex", "")),
+                "flags": str(getattr(stat, "flags", "") or ""),
+                "addresses": _interface_addresses(addresses, name),
             }
         )
     return summaries

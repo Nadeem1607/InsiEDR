@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 import requests
 
@@ -84,6 +85,32 @@ def test_agent_retries_existing_queue_before_new_telemetry(tmp_path):
     assert summary.queue_retry == {"attempted": 1, "sent": 1, "retained": 0}
     assert summary.sent is True
     assert summary.queued is False
+    assert session.calls == 2
+    assert agent.queue.count() == 0
+
+
+def test_offline_queue_contains_only_encrypted_payload_and_retries_first(tmp_path):
+    agent = EndpointAgent(replace(_config(tmp_path), agent_token="offline-token-secret"))
+    agent.collectors = [GoodCollector(hostname="host-a")]
+    agent.transport.session = FailingSession()
+
+    offline_summary = agent.run_once()
+
+    assert offline_summary.sent is False
+    assert offline_summary.queued is True
+    assert agent.queue.count() == 1
+    queued_text = next(tmp_path.glob("*.json")).read_text(encoding="utf-8")
+    assert "ciphertext" in queued_text
+    assert "daily_logon_count" not in queued_text
+    assert "offline-token-secret" not in queued_text
+    assert "Authorization" not in queued_text
+
+    session = SuccessSession()
+    agent.transport.session = session
+    retry_summary = agent.run_once()
+
+    assert retry_summary.queue_retry == {"attempted": 1, "sent": 1, "retained": 0}
+    assert retry_summary.sent is True
     assert session.calls == 2
     assert agent.queue.count() == 0
 

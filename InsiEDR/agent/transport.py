@@ -36,7 +36,7 @@ class TelemetryTransport:
         self.timeout_seconds = timeout_seconds
         self.verify_tls = verify_tls
         self.agent_token = agent_token
-        self.session = session or requests.Session()
+        self.session = session if session is not None else requests.Session()
 
     def _headers(self, headers: Mapping[str, str] | None = None) -> dict[str, str]:
         final = {

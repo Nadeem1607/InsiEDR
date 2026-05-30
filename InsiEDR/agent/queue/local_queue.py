@@ -9,8 +9,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
+from shared.protocol import CRYPTO_SCHEME_AESGCM, CRYPTO_SCHEME_FERNET
+
 
 log = logging.getLogger(__name__)
+
+
+ENVELOPE_REQUIRED_FIELDS = {
+    CRYPTO_SCHEME_AESGCM: ("nonce", "ciphertext"),
+    CRYPTO_SCHEME_FERNET: ("token",),
+}
 
 
 @dataclass(frozen=True)
@@ -32,10 +40,7 @@ class LocalEncryptedQueue:
     def __init__(self, queue_dir: str | Path) -> None:
         self.queue_dir = Path(queue_dir).expanduser()
         self.queue_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            os.chmod(self.queue_dir, 0o700)
-        except OSError:
-            pass
+        self._chmod_restrictive(self.queue_dir, 0o700)
 
     def enqueue(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None) -> Path:
         created = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -49,17 +54,19 @@ class LocalEncryptedQueue:
             "headers": dict(headers or {}),
             "envelope": dict(envelope),
         }
-        with tmp_path.open("w", encoding="utf-8") as fh:
-            json.dump(body, fh, sort_keys=True, separators=(",", ":"))
+        self._validate_body(body)
         try:
-            os.chmod(tmp_path, 0o600)
-        except OSError:
-            pass
+            with tmp_path.open("w", encoding="utf-8") as fh:
+                json.dump(body, fh, sort_keys=True, separators=(",", ":"))
+        except Exception:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+            raise
+        self._chmod_restrictive(tmp_path, 0o600)
         tmp_path.replace(final_path)
-        try:
-            os.chmod(final_path, 0o600)
-        except OSError:
-            pass
+        self._chmod_restrictive(final_path, 0o600)
         return final_path
 
     def iter_items(self, *, limit: int | None = None) -> Iterator[QueueItem]:
@@ -70,8 +77,7 @@ class LocalEncryptedQueue:
             try:
                 with path.open("r", encoding="utf-8") as fh:
                     body = json.load(fh)
-                if not isinstance(body, dict) or not isinstance(body.get("envelope"), dict):
-                    raise ValueError("queue file does not contain an encrypted envelope")
+                self._validate_body(body)
             except Exception as exc:
                 log.warning("ignoring corrupt queue file %s: %s", path.name, exc)
                 self._quarantine(path)
@@ -98,3 +104,32 @@ class LocalEncryptedQueue:
                 path.unlink()
             except OSError:
                 pass
+
+    @staticmethod
+    def _chmod_restrictive(path: Path, mode: int) -> None:
+        if os.name == "nt":
+            return
+        try:
+            os.chmod(path, mode)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _validate_body(body: Any) -> None:
+        if not isinstance(body, dict):
+            raise ValueError("queue file must contain a JSON object")
+        headers = body.get("headers", {})
+        if headers is not None and not isinstance(headers, dict):
+            raise ValueError("queue file headers must be an object")
+        envelope = body.get("envelope")
+        if not isinstance(envelope, dict):
+            raise ValueError("queue file does not contain an encrypted envelope")
+        scheme = envelope.get("scheme")
+        if not isinstance(scheme, str) or not scheme:
+            raise ValueError("queue envelope is missing an encryption scheme")
+        required = ENVELOPE_REQUIRED_FIELDS.get(scheme)
+        if required is None:
+            raise ValueError(f"queue envelope uses unsupported encryption scheme: {scheme}")
+        for field_name in required:
+            if not isinstance(envelope.get(field_name), str) or not envelope[field_name]:
+                raise ValueError(f"queue envelope is missing field: {field_name}")

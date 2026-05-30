@@ -76,7 +76,7 @@ CONFIG = {
     # Sliding window length (seconds) for all windowed features
     "WINDOW_SECONDS": int(os.getenv("EDR_WINDOW_SECONDS", "300")),
     # Lookback window for raw activity-rate features (must be >= WINDOW_SECONDS)
-    "LOOKBACK_SECONDS": int(os.getenv("EDR_LOOKBACK_SECONDS", os.getenv("EDR_BASELINE_SECONDS", "3600"))),  # 1 hr
+    "LOOKBACK_SECONDS": int(os.getenv("EDR_LOOKBACK_SECONDS", "3600")),  # 1 hr
     # Business-hours policy (local time). Outside = off-hours.
     "BUSINESS_HOUR_START": 9,
     "BUSINESS_HOUR_END": 18,
@@ -133,6 +133,30 @@ def _safe_int(v):
         return None
 
 
+def _is_event_log_access_denied(exc):
+    code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+    if code in {5, 1314}:
+        return True
+    text = str(exc).lower()
+    return "access is denied" in text or "privilege" in text
+
+
+def check_security_event_log_access():
+    """Return agent-safe Security log access diagnostics without reading events."""
+    if not IS_WINDOWS:
+        return {"windows": False, "channel": "Security", "readable": False, "reason": "not_windows"}
+    handle = None
+    try:
+        handle = win32evtlog.OpenEventLog("localhost", "Security")
+        return {"windows": True, "channel": "Security", "readable": True, "reason": ""}
+    except Exception as exc:
+        reason = "access_denied" if _is_event_log_access_denied(exc) else exc.__class__.__name__
+        return {"windows": True, "channel": "Security", "readable": False, "reason": reason}
+    finally:
+        if handle is not None:
+            win32evtlog.CloseEventLog(handle)
+
+
 def collect_auth_events(lookback_seconds):
 
     if not IS_WINDOWS:
@@ -185,6 +209,10 @@ def collect_auth_events(lookback_seconds):
                 events_out.append(parsed)
 
     except Exception as e:
+        if _is_event_log_access_denied(e):
+            raise PermissionError(
+                "Security Event Log access denied; run the agent service as LocalSystem/Admin or grant Event Log Readers access."
+            ) from e
         log.exception("Failed reading Security event log: %s", e)
         # Return whatever we captured so far; upstream validator will flag
         return events_out

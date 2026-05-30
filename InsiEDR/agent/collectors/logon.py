@@ -71,6 +71,30 @@ def _assert_windows():
         raise EnvironmentError("Logon feature collection requires Windows.")
 
 
+def _is_access_denied(exc: BaseException) -> bool:
+    code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+    if code in {5, 1314}:
+        return True
+    text = str(exc).lower()
+    return "access is denied" in text or "privilege" in text
+
+
+def check_security_event_log_access(server: str = "localhost") -> Dict[str, Any]:
+    """Return agent-safe Security log access diagnostics without reading events."""
+    if not _IS_WINDOWS:
+        return {"windows": False, "channel": "Security", "readable": False, "reason": "not_windows"}
+    handle = None
+    try:
+        handle = win32evtlog.OpenEventLog(server, "Security")
+        return {"windows": True, "channel": "Security", "readable": True, "reason": ""}
+    except Exception as exc:
+        reason = "access_denied" if _is_access_denied(exc) else exc.__class__.__name__
+        return {"windows": True, "channel": "Security", "readable": False, "reason": reason}
+    finally:
+        if handle is not None:
+            win32evtlog.CloseEventLog(handle)
+
+
 
 def _build_time_filter(target_date: datetime) -> Tuple[datetime, datetime]:
     day_start = datetime.combine(target_date.date(), dtime.min)
@@ -94,6 +118,10 @@ def query_security_events(
     try:
         handle = win32evtlog.OpenEventLog(server, log_type)
     except Exception as exc:
+        if _is_access_denied(exc):
+            raise PermissionError(
+                "Security Event Log access denied; run the agent service as LocalSystem/Admin or grant Event Log Readers access."
+            ) from exc
         logger.error("Cannot open Security log on %s: %s", server, exc)
         return events
 

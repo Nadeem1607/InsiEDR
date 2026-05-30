@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -22,7 +23,7 @@ DEFAULT_DISCOVERY_COLLECTORS = (
 
 
 def _short_term_fallback(module) -> Mapping[str, Any]:
-    raw_events = module.collect_auth_events(module.CONFIG["BASELINE_SECONDS"])
+    raw_events = module.collect_auth_events(module.CONFIG["LOOKBACK_SECONDS"])
     return module.compute_features(raw_events)
 
 
@@ -49,7 +50,7 @@ COLLECTOR_SPECS = {
     "short-term-edr": {
         "filename": "short-Term_EDR_Feature.py",
         "fallback": _short_term_fallback,
-        "aliases": {"short-term-edr", "short_term_edr_feature", "short-Term_EDR_Feature.py"},
+        "aliases": {"short-term-edr", "short_term_edr", "short_term_edr_feature", "short-Term_EDR_Feature.py"},
     },
     "computed-meta-features": {
         "filename": "computed_Meta-Features",
@@ -68,12 +69,12 @@ COLLECTOR_SPECS = {
     "http-feature": {
         "filename": "http_feature.py",
         "fallback": _http_fallback,
-        "aliases": {"http-feature", "http_feature", "http_feature.py"},
+        "aliases": {"http-feature", "http_feature", "browser-history", "browser_history", "http_feature.py"},
     },
     "logon": {
         "filename": "logon.py",
         "fallback": _logon_fallback,
-        "aliases": {"logon", "logon.py"},
+        "aliases": {"logon", "session-monitor", "session_monitor", "logon.py"},
     },
     "network-monitor": {
         "filename": "network_monitor.py",
@@ -82,12 +83,18 @@ COLLECTOR_SPECS = {
 }
 
 
+def _normalize_name(name: str) -> str:
+    stem = Path(name.strip()).stem
+    return re.sub(r"[^a-z0-9]+", "_", stem.lower()).strip("_")
+
+
 def _canonical_name(name: str) -> str:
-    normalized = name.strip()
+    normalized = _normalize_name(name)
     for canonical, spec in COLLECTOR_SPECS.items():
-        if normalized == canonical or normalized in spec["aliases"]:
+        names = {canonical, *spec["aliases"]}
+        if normalized in {_normalize_name(item) for item in names}:
             return canonical
-    return normalized
+    return name.strip()
 
 
 def discover_collectors(

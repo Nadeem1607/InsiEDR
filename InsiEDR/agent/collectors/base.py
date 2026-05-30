@@ -127,7 +127,11 @@ class PythonModuleCollector(BaseCollector):
             raise ImportError(f"cannot build import spec for {self.path.name}")
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            sys.modules.pop(spec.name, None)
+            raise
         return module
 
     def _call_module(self, module: ModuleType) -> Mapping[str, Any]:
@@ -176,10 +180,7 @@ class ComputedMetaFeatureCollector(BaseCollector):
                 "status": "server_deferred",
                 "server_deferred_features": [
                     "daily_files_to_removable_7d_sum",
-                    "daily_risk_delta",
-                    "daily_risk_rolling_mean_7d",
-                    "daily_risk_rolling_std_7d",
                 ],
-                "reason": "The endpoint does not own long-window storage or risk values; the server computes these from received telemetry.",
+                "reason": "The endpoint emits collection features only; long-window derivations are computed from received telemetry outside the agent.",
             }
         )

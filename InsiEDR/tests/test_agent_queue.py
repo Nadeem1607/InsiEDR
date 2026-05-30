@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import stat
 
+import pytest
+
 from agent.queue.local_queue import LocalEncryptedQueue
 
 
@@ -36,3 +38,13 @@ def test_queue_corruption_is_quarantined(tmp_path):
 
     assert list(queue.iter_items()) == []
     assert list(tmp_path.glob("*.corrupt"))
+
+
+def test_queue_rejects_malformed_envelope_without_leaving_tmp_file(tmp_path):
+    queue = LocalEncryptedQueue(tmp_path)
+
+    with pytest.raises(ValueError):
+        queue.enqueue({"scheme": "aes-256-gcm", "nonce": "n"}, {})
+
+    assert queue.count() == 0
+    assert list(tmp_path.glob("*.tmp")) == []

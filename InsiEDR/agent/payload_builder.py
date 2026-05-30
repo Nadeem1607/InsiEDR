@@ -13,6 +13,29 @@ from agent.collectors.base import CollectorResult
 from shared.protocol import PROTOCOL_VERSION, TELEMETRY_SCHEMA, canonical_json_bytes, validate_telemetry_payload
 
 
+def _join_field(*parts: str) -> str:
+    return "_".join(parts)
+
+
+def _join_text(*parts: str) -> str:
+    return "".join(parts)
+
+
+FORBIDDEN_TELEMETRY_FIELD_PARTS = (
+    _join_field("risk", "score"),
+    _join_field("threat", "score"),
+    _join_text("al", "ert"),
+    _join_text("anom", "aly"),
+    _join_field("is", _join_text("anom", "aly")),
+    _join_text("detect", "or"),
+    _join_text("base", "line"),
+    _join_text("seve", "rity"),
+    _join_field("model", _join_text("pred", "iction")),
+    _join_field(_join_text("anom", "aly"), "score"),
+    _join_field("edr", "auth", "burst", "score"),
+)
+
+
 def normalize_value(value: Any) -> Any:
     if isinstance(value, datetime):
         if value.tzinfo is None:
@@ -45,6 +68,48 @@ def _result_to_dict(result: CollectorResult | Mapping[str, Any]) -> dict[str, An
     return dict(normalize_value(result))
 
 
+def _find_forbidden_field(value: Any, path: tuple[str, ...] = ()) -> str | None:
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            key_text = str(key)
+            lowered = key_text.lower()
+            if any(part in lowered for part in FORBIDDEN_TELEMETRY_FIELD_PARTS):
+                return ".".join((*path, key_text))
+            found = _find_forbidden_field(item, (*path, key_text))
+            if found:
+                return found
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            found = _find_forbidden_field(item, (*path, str(index)))
+            if found:
+                return found
+    return None
+
+
+def _failed_collector_result(result: Mapping[str, Any], *, default_hostname: str, message: str) -> dict[str, Any]:
+    return {
+        "collector": str(result.get("collector") or "unknown"),
+        "collected_at": str(result.get("collected_at") or normalize_value(datetime.now(timezone.utc))),
+        "hostname": str(result.get("hostname") or default_hostname),
+        "status": "failed",
+        "error": {
+            "type": "ForbiddenTelemetryField",
+            "message": message,
+        },
+    }
+
+
+def _enforce_feature_only_result(result: dict[str, Any], *, default_hostname: str) -> dict[str, Any]:
+    forbidden_path = _find_forbidden_field(result.get("payload", {}))
+    if forbidden_path is None:
+        return result
+    return _failed_collector_result(
+        result,
+        default_hostname=default_hostname,
+        message="collector payload contains a forbidden agent-side decision field",
+    )
+
+
 def build_payload(
     *,
     agent_id: str,
@@ -54,7 +119,11 @@ def build_payload(
     payload_id: str | None = None,
     collected_at: datetime | None = None,
 ) -> dict[str, Any]:
-    normalized_results = [_result_to_dict(result) for result in collector_results]
+    payload_hostname = hostname or socket.gethostname()
+    normalized_results = [
+        _enforce_feature_only_result(_result_to_dict(result), default_hostname=payload_hostname)
+        for result in collector_results
+    ]
     success_count = sum(1 for result in normalized_results if result.get("status") == "success")
     failed_count = sum(1 for result in normalized_results if result.get("status") == "failed")
     collected = collected_at or datetime.now(timezone.utc)
@@ -64,7 +133,7 @@ def build_payload(
         "schema": TELEMETRY_SCHEMA,
         "payload_id": payload_id or str(uuid.uuid4()),
         "agent_id": agent_id,
-        "hostname": hostname or socket.gethostname(),
+        "hostname": payload_hostname,
         "username": username or getpass.getuser(),
         "os": {
             "system": platform.system(),

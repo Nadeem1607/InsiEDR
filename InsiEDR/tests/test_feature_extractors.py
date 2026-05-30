@@ -25,7 +25,7 @@ def test_computed_meta_extensionless_spec_is_wrapped(tmp_path: Path):
 
     assert result.status == "success"
     assert result.as_dict()["payload"]["status"] == "server_deferred"
-    assert "daily_risk_delta" in result.as_dict()["payload"]["server_deferred_features"]
+    assert result.as_dict()["payload"]["server_deferred_features"] == ["daily_files_to_removable_7d_sum"]
 
 
 class _GoodCollector(BaseCollector):

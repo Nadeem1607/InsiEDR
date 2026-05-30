@@ -21,7 +21,18 @@ class SuccessSession:
         return Response()
 
 
-@pytest.mark.parametrize("contents", ["", "{", "{\"headers\": {}}", "[]"])
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "",
+        "{",
+        "{\"headers\": {}}",
+        "{\"envelope\": {}}",
+        "{\"envelope\": {\"scheme\": \"aes-256-gcm\", \"nonce\": \"n\", \"ciphertext\": \"c\"}, \"headers\": \"bad\"}",
+        "{\"envelope\": {\"scheme\": \"plaintext\", \"ciphertext\": \"c\"}}",
+        "[]",
+    ],
+)
 def test_corrupted_queue_files_are_quarantined_and_skipped(tmp_path, contents):
     queue = LocalEncryptedQueue(tmp_path)
     bad_file = tmp_path / "bad.json"

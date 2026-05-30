@@ -21,6 +21,7 @@ import logging
 import os
 import platform
 import socket
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from typing import Any, Dict, List, Optional
@@ -78,6 +79,17 @@ LARGE_USB_THRESHOLD_MB  = 100                        # strictly >100 MB = "large
 # System log: DriverFrameworks-UserMode events 2003/2004 (connect/new-device)
 USB_CONNECT_EVENT_IDS    = {2003, 2004}   # System log only (6416 removed)
 USB_DISCONNECT_EVENT_IDS = {2100, 2102}   # System log
+USB_MODERN_CHANNELS = (
+    "Microsoft-Windows-DriverFrameworks-UserMode/Operational",
+)
+
+
+def _is_access_denied(exc: BaseException) -> bool:
+    code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+    if code in {5, 1314}:
+        return True
+    text = str(exc).lower()
+    return "access is denied" in text or "privilege" in text
 
 
 # 3. COLLECTION LAYER
@@ -138,7 +150,13 @@ def _query_event_log(channel: str, event_ids: set, hours_back: int = 24) -> List
                     lifetime_id = inserts[1] if len(inserts) > 1 else None,
                 ))
     except Exception as exc:                       # noqa: BLE001
-        log.error("Event log query failed on %s: %s", channel, exc)
+        if _is_access_denied(exc):
+            log.warning(
+                "Event log channel %s is not readable by this account; run the agent service with Event Log Reader/Admin rights.",
+                channel,
+            )
+        else:
+            log.error("Event log query failed on %s: %s", channel, exc)
     finally:
 
         if handle is not None:
@@ -147,6 +165,87 @@ def _query_event_log(channel: str, event_ids: set, hours_back: int = 24) -> List
             except Exception:                      # noqa: BLE001
                 pass
     return events
+
+
+def _parse_usb_event_xml(xml_text: str, event_ids: set) -> Optional[UsbEvent]:
+    root = ET.fromstring(xml_text)
+    namespace = {"e": "http://schemas.microsoft.com/win/2004/08/events/event"}
+    event_id_text = root.findtext("./e:System/e:EventID", namespaces=namespace)
+    if not event_id_text:
+        return None
+    event_id = int(event_id_text)
+    if event_id not in event_ids:
+        return None
+
+    time_node = root.find("./e:System/e:TimeCreated", namespaces=namespace)
+    timestamp_text = time_node.attrib.get("SystemTime", "") if time_node is not None else ""
+    try:
+        timestamp = datetime.fromisoformat(timestamp_text.replace("Z", "+00:00")).astimezone().replace(tzinfo=None)
+    except ValueError:
+        timestamp = datetime.now()
+
+    values = [
+        str(node.text or "")
+        for node in root.findall("./e:EventData/e:Data", namespaces=namespace)
+        if str(node.text or "")
+    ]
+    device_id = next(
+        (value for value in values if "USB" in value.upper() or "VID_" in value.upper()),
+        values[0] if values else "unknown",
+    )
+    lifetime_id = next((value for value in values if value != device_id), None)
+    return UsbEvent(event_id=event_id, timestamp=timestamp, device_id=device_id, lifetime_id=lifetime_id)
+
+
+def _query_modern_event_channel(channel: str, event_ids: set, hours_back: int = 24) -> List[UsbEvent]:
+    """Pull USB events from modern Windows Event Log channels through EvtQuery."""
+    events: List[UsbEvent] = []
+    if not IS_WINDOWS or not hasattr(win32evtlog, "EvtQuery"):
+        return events
+
+    cutoff = datetime.now() - timedelta(hours=hours_back)
+    query = "*[System[{}]]".format(" or ".join(f"EventID={event_id}" for event_id in sorted(event_ids)))
+    handle = None
+    try:
+        handle = win32evtlog.EvtQuery(channel, win32evtlog.EvtQueryReverseDirection, query)
+        while True:
+            batch = win32evtlog.EvtNext(handle, 32)
+            if not batch:
+                break
+            for event_handle in batch:
+                try:
+                    event = _parse_usb_event_xml(
+                        win32evtlog.EvtRender(event_handle, win32evtlog.EvtRenderEventXml),
+                        event_ids,
+                    )
+                    if event is None:
+                        continue
+                    if event.timestamp < cutoff:
+                        return events
+                    events.append(event)
+                finally:
+                    if hasattr(win32evtlog, "EvtClose"):
+                        win32evtlog.EvtClose(event_handle)
+    except Exception as exc:                       # noqa: BLE001
+        if _is_access_denied(exc):
+            log.warning(
+                "Event log channel %s is not readable by this account; run the agent service with Event Log Reader/Admin rights.",
+                channel,
+            )
+        else:
+            log.info("Modern event channel %s is unavailable or disabled: %s", channel, exc)
+    finally:
+        if handle is not None and hasattr(win32evtlog, "EvtClose"):
+            win32evtlog.EvtClose(handle)
+    return events
+
+
+def _dedupe_usb_events(events: List[UsbEvent]) -> List[UsbEvent]:
+    unique: dict[tuple[int, str, str, Optional[str]], UsbEvent] = {}
+    for event in events:
+        key = (event.event_id, event.timestamp.isoformat(), event.device_id, event.lifetime_id)
+        unique[key] = event
+    return list(unique.values())
 
 
 def _enumerate_usbstor_registry() -> List[str]:
@@ -191,11 +290,17 @@ def collect_raw_usb_telemetry() -> Dict[str, Any]:
 
     # System log: DriverFrameworks-UserMode connect events (2003/2004)
     connects = _query_event_log("System", USB_CONNECT_EVENT_IDS)
+    disconnects = _query_event_log("System", USB_DISCONNECT_EVENT_IDS)
+    for channel in USB_MODERN_CHANNELS:
+        modern_events = _query_modern_event_channel(channel, USB_CONNECT_EVENT_IDS | USB_DISCONNECT_EVENT_IDS)
+        connects.extend(event for event in modern_events if event.event_id in USB_CONNECT_EVENT_IDS)
+        disconnects.extend(event for event in modern_events if event.event_id in USB_DISCONNECT_EVENT_IDS)
+
     # Security log: Plug-and-Play audit event 6416 (separate channel — no overlap)
     connects += _query_event_log("Security", {6416})
-
-    disconnects    = _query_event_log("System", USB_DISCONNECT_EVENT_IDS)
     registry_devices = _enumerate_usbstor_registry()
+    connects = _dedupe_usb_events(connects)
+    disconnects = _dedupe_usb_events(disconnects)
 
     # If running on a non-Windows host (dev/CI), synthesize a minimal dataset
     # so the validation/DB pipeline is still exercisable end-to-end.

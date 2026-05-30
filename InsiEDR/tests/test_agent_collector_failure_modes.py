@@ -82,6 +82,17 @@ def test_non_json_serializable_collector_output_is_reported_as_failure(tmp_path)
     assert result.error["type"] == "TypeError"
 
 
+def test_failed_module_import_does_not_leave_partial_module(tmp_path):
+    module_path = tmp_path / "boom.py"
+    module_path.write_text("raise RuntimeError('import boom')\n", encoding="utf-8")
+    collector = PythonModuleCollector(name="boom", path=module_path)
+
+    result = collector.collect()
+
+    assert result.status == "failed"
+    assert "insiedr_collector_boom" not in sys.modules
+
+
 def test_empty_collector_output_is_valid_success():
     result = EmptyCollector(hostname="qa-host").collect()
 
