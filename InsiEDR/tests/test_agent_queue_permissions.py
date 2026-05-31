@@ -58,7 +58,7 @@ def test_replay_success_deletes_file_and_failure_preserves_file(tmp_path):
         session=RecordingSession(204),
     )
 
-    assert success_transport.retry_queued() == {"attempted": 1, "sent": 1, "retained": 0}
+    assert success_transport.retry_queued() == {"attempted": 1, "sent": 1, "retained": 0, "dead_lettered": 0}
     assert success_queue.count() == 0
 
     failure_queue = LocalEncryptedQueue(tmp_path / "failure")
@@ -69,7 +69,7 @@ def test_replay_success_deletes_file_and_failure_preserves_file(tmp_path):
         session=RecordingSession(503),
     )
 
-    assert failure_transport.retry_queued() == {"attempted": 1, "sent": 0, "retained": 1}
+    assert failure_transport.retry_queued() == {"attempted": 1, "sent": 0, "retained": 1, "dead_lettered": 0}
     assert failure_queue.count() == 1
 
 

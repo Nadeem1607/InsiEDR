@@ -35,7 +35,12 @@ def test_payload_matches_shared_protocol_and_is_json_serializable():
     assert payload["agent_id"] == "agent-1"
     assert payload["hostname"] == "host-a"
     assert payload["username"] == "user-a"
+    assert "timezone_name" in payload
+    assert isinstance(payload["utc_offset_minutes"], int)
+    assert "timezone_assumption" in payload
     assert payload["collectors"][0]["collector"] == "file-feature"
+    assert payload["collectors"][0]["quality"] == "exact"
+    assert payload["collectors"][0]["feature_quality"]["file_access_count"] == "exact"
     assert payload["collectors"][0]["payload"]["file_access_count"] == 4
     assert payload["summary"] == {"collector_count": 1, "success_count": 1, "failed_count": 0}
     assert json.loads(canonical_json_bytes(payload).decode("utf-8"))["agent_id"] == "agent-1"
@@ -108,6 +113,8 @@ def test_payload_does_not_contain_agent_side_detection_fields():
         "model_prediction",
         "anomaly_score",
         "edr_auth_burst_score",
+        "suspicious_url_count",
+        "malicious_file_count",
     ],
 )
 def test_forbidden_collector_decision_field_becomes_failed_result(field_name):
@@ -131,6 +138,25 @@ def test_forbidden_collector_decision_field_becomes_failed_result(field_name):
     assert payload["collectors"][0]["status"] == "failed"
     assert payload["collectors"][0]["error"]["type"] == "ForbiddenTelemetryField"
     assert payload["summary"] == {"collector_count": 1, "success_count": 0, "failed_count": 1}
+
+
+def test_unsupported_quality_value_is_rejected():
+    with pytest.raises(ValueError, match="unsupported quality value"):
+        build_payload(
+            agent_id="agent-1",
+            hostname="host-a",
+            username="user-a",
+            collector_results=[
+                {
+                    "collector": "bad-quality",
+                    "collected_at": "2026-05-25T00:00:00Z",
+                    "hostname": "host-a",
+                    "status": "success",
+                    "quality": "pretty-good",
+                    "payload": {"file_access_count": 1},
+                }
+            ],
+        )
 
 
 def test_default_computed_meta_placeholder_is_feature_only():

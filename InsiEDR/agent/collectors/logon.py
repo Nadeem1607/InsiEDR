@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-logon.py — Windows Logon Feature Collector for Insider Threat Detection
+logon.py — Windows Logon Feature Collector for endpoint telemetry
 Dependencies:
-  pip install pywin32 psycopg2-binary
+  pip install pywin32
 """
 
 import json
@@ -28,16 +28,6 @@ if _IS_WINDOWS:
     import win32security
     import pywintypes
 
-try:
-    import psycopg2
-    import psycopg2.extras
-    _HAS_PSYCOPG2 = True
-except ImportError:
-    _HAS_PSYCOPG2 = False
-
-
-
-
 # Logging & Config
 
 logging.basicConfig(
@@ -47,18 +37,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("logon_collector")
 
-DB_CONFIG = {
-    "host": os.getenv("INSIEDR_DB_HOST", "localhost"),
-    "port": int(os.getenv("INSIEDR_DB_PORT", "5432")),
-    "dbname": os.getenv("INSIEDR_DB_NAME", "insiedr"),
-    "user": os.getenv("INSIEDR_DB_USER", "insiedr"),
-    "password": os.getenv("INSIEDR_DB_PASSWORD", "changeme"),
-}
-
 BUSINESS_HOUR_START = 8   # 08:00
 BUSINESS_HOUR_END = 18    # 18:00
 SESSION_TIMEOUT_HOURS = 12
-DB_BATCH_SIZE = 500
 TABLE_NAME = "logon_features"
 LOCAL_HOSTNAME = os.getenv("COMPUTERNAME", "UNKNOWN").upper()
 
@@ -318,103 +299,16 @@ def derive_features(
     return result
 
 
-#  SECTION 3 — DATABASE INSERTION
-
-CREATE_TABLE_SQL = f"""
-CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-    id BIGSERIAL PRIMARY KEY, "user" VARCHAR(128) NOT NULL, date DATE NOT NULL, hostname VARCHAR(128) NOT NULL,
-    logon_count INTEGER DEFAULT 0, logoff_count INTEGER DEFAULT 0, after_hours_logon INTEGER DEFAULT 0,
-    weekend_logon INTEGER DEFAULT 0, unique_pc_count INTEGER DEFAULT 0, session_duration_avg DOUBLE PRECISION DEFAULT 0,
-    session_duration_max DOUBLE PRECISION DEFAULT 0, first_logon_time TIMESTAMP, last_logoff_time TIMESTAMP,
-    remote_logon_count INTEGER DEFAULT 0, daily_failed_login_ratio DOUBLE PRECISION DEFAULT 0,
-    daily_after_hours_logon_ratio DOUBLE PRECISION DEFAULT 0, daily_logon_count INTEGER DEFAULT 0,
-    daily_new_pc_count INTEGER DEFAULT 0, daily_pc_access_entropy DOUBLE PRECISION DEFAULT 0,
-    daily_unique_pc_count INTEGER DEFAULT 0, workstations_seen JSONB, collected_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE ("user", date, hostname)
-);
-"""
-
-INSERT_COLUMNS = [
-    "user", "date", "hostname", "logon_count", "logoff_count", "after_hours_logon",
-    "weekend_logon", "unique_pc_count", "session_duration_avg", "session_duration_max",
-    "first_logon_time", "last_logoff_time", "remote_logon_count", "daily_failed_login_ratio",
-    "daily_after_hours_logon_ratio", "daily_logon_count", "daily_new_pc_count",
-    "daily_pc_access_entropy", "daily_unique_pc_count", "workstations_seen", "collected_at"
-]
-
-UPSERT_SQL = f"""
-INSERT INTO {TABLE_NAME} ({', '.join(f'"{c}"' for c in INSERT_COLUMNS)})
-VALUES ({', '.join(['%s'] * len(INSERT_COLUMNS))})
-ON CONFLICT ("user", date, hostname)
-DO UPDATE SET
-    logon_count                 = EXCLUDED.logon_count,
-    logoff_count                = EXCLUDED.logoff_count,
-    after_hours_logon           = EXCLUDED.after_hours_logon,
-    weekend_logon               = EXCLUDED.weekend_logon,
-    unique_pc_count             = EXCLUDED.unique_pc_count,
-    session_duration_avg        = EXCLUDED.session_duration_avg,
-    session_duration_max        = EXCLUDED.session_duration_max,
-    first_logon_time            = EXCLUDED.first_logon_time,
-    last_logoff_time            = EXCLUDED.last_logoff_time,
-    remote_logon_count          = EXCLUDED.remote_logon_count,
-    daily_failed_login_ratio    = EXCLUDED.daily_failed_login_ratio,
-    daily_after_hours_logon_ratio = EXCLUDED.daily_after_hours_logon_ratio,
-    daily_logon_count           = EXCLUDED.daily_logon_count,
-    daily_new_pc_count          = EXCLUDED.daily_new_pc_count,
-    daily_pc_access_entropy     = EXCLUDED.daily_pc_access_entropy,
-    daily_unique_pc_count       = EXCLUDED.daily_unique_pc_count,
-    workstations_seen           = EXCLUDED.workstations_seen,
-    collected_at                = EXCLUDED.collected_at
-"""
-
-def get_db_connection():
-    if not _HAS_PSYCOPG2:
-        raise ImportError("psycopg2 is required for DB insertion.")
-    conn = psycopg2.connect(**DB_CONFIG)
-    conn.autocommit = False
-    return conn
-
-
-def fetch_historical_pcs(conn) -> Dict[str, Set[str]]:
-    hist = defaultdict(set)
-    try:
-        with conn.cursor() as cur:
-            cur.execute(f"SELECT \"user\", workstations_seen FROM {TABLE_NAME}")
-            for u, pcs in cur.fetchall():
-                if pcs:
-                    data = json.loads(pcs) if isinstance(pcs, str) else pcs
-                    if isinstance(data, list):
-                        hist[u].update(data)
-    except Exception as e:
-        logger.debug("History fetch error: %s", e)
-    return hist
-
-
-
-def insert_features(conn, features: Dict[str, Dict[str, Any]]) -> int:
-    rows = []
-    for f in features.values():
-        row = tuple(f[c] if c != "workstations_seen" else json.dumps(f[c]) for c in INSERT_COLUMNS)
-        rows.append(row)
-    
-    if not rows: return 0
-    try:
-        with conn.cursor() as cur:
-            psycopg2.extras.execute_batch(cur, UPSERT_SQL, rows)
-        conn.commit()
-        return len(rows)
-    except Exception as exc:
-        conn.rollback()
-        logger.error("DB insert failed: %s", exc)
-        raise
-
+#  SECTION 3 - AGENT COLLECTION
 
 def collect(target_date: Optional[datetime] = None) -> Dict[str, Dict[str, Any]]:
-    """Agent-safe entry point: collect and derive features without PostgreSQL writes."""
+    """Agent-safe entry point: collect and derive endpoint telemetry features."""
     selected_date = target_date or datetime.now()
     day_start, day_end = _build_time_filter(selected_date)
     events = query_security_events([4624, 4634, 4647, 4625], day_start, day_end)
-    return derive_features(events, selected_date)
+    features = derive_features(events, selected_date)
+    features["_collector_quality"] = "heuristic"
+    return features
 
 
 def collect_features() -> Dict[str, Dict[str, Any]]:
@@ -448,7 +342,7 @@ class TestReport:
         total = len(self._results)
         print("-" * 64)
         print(f"  {self.suite_name}: {passed}/{total} passed")
-        print("  All features are being collected correctly" if self.all_passed else "  Feature collection issues detected")
+        print("  All features are being collected correctly" if self.all_passed else "  Feature collection issues found")
         print("-" * 64)
 
 def run_tests(skip_db: bool = False) -> bool:
@@ -499,24 +393,8 @@ def main():
     day_start, day_end = _build_time_filter(target_date)
     events = query_security_events([4624, 4634, 4647, 4625], day_start, day_end)
     
-    conn = None
-    historical = {}
-    if _HAS_PSYCOPG2 and not args.dry_run:
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur: cur.execute(CREATE_TABLE_SQL)
-            conn.commit()
-            historical = fetch_historical_pcs(conn)
-        except Exception as e: logger.error("DB Error: %s", e)
+    features = derive_features(events, target_date)
 
-    features = derive_features(events, target_date, historical)
-
-    if args.dry_run:
-        print(json.dumps(features, indent=2, default=str))
-    elif conn and features:
-        count = insert_features(conn, features)
-        logger.info("Pipeline complete — %d rows upserted.", count)
-        conn.close()
-
+    print(json.dumps(features, indent=2, default=str))
 if __name__ == "__main__":
     main()

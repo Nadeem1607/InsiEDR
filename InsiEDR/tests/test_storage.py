@@ -26,4 +26,4 @@ def test_corrupt_queue_file_does_not_crash_iteration(tmp_path):
 
     assert list(queue.iter_items()) == []
     assert queue.count() == 0
-    assert list(tmp_path.glob("*.corrupt"))
+    assert list((tmp_path / "dead_letter").glob("broken.json.invalid*"))

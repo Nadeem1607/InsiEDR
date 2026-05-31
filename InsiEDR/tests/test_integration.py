@@ -72,7 +72,7 @@ def test_successful_retry_deletes_queued_payload(tmp_path):
 
     summary = transport.retry_queued()
 
-    assert summary == {"attempted": 1, "sent": 1, "retained": 0}
+    assert summary == {"attempted": 1, "sent": 1, "retained": 0, "dead_lettered": 0}
     assert session.calls == 1
     assert queue.count() == 0
 
@@ -85,6 +85,7 @@ def test_endpoint_agent_run_once_collects_encrypts_and_queues(tmp_path):
         hostname="host-a",
         username="user-a",
         queue_dir=tmp_path,
+        state_dir=tmp_path / "state",
         enabled_collectors=("computed-meta-features",),
         request_timeout_seconds=1,
     )

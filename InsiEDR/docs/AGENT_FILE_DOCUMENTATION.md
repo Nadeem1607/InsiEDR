@@ -4,6 +4,11 @@ This document explains the Python files used by the InsiEDR Phase 2 endpoint age
 
 The agent must stay feature-only. It must not do scoring, alerting, anomaly detection, baseline learning, risk aggregation, or ML prediction. Those responsibilities belong to the backend/model side after the backend decrypts and validates telemetry.
 
+For current production runtime defaults, persistent identity, synthetic-data opt-in,
+queue limits, local health status, timezone metadata, quality metadata, protected
+collector state, and legacy database demo isolation, see
+`docs/AGENT_RUNTIME_HARDENING.md`.
+
 ## High-Level Agent Flow
 
 1. `agent/agent.py` loads configuration from `agent/config.py`.

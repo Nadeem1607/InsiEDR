@@ -47,6 +47,9 @@ def validate_telemetry_payload(payload: Mapping[str, Any]) -> None:
         "agent_id": str,
         "hostname": str,
         "collected_at": str,
+        "timezone_name": str,
+        "utc_offset_minutes": int,
+        "timezone_assumption": str,
         "collectors": list,
     }
     for key, expected_type in required.items():

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
+import json
 
 import requests
 
 from agent.agent import EndpointAgent
+from agent.health import health_status_path
 from agent.collectors.base import BaseCollector
 from agent.config import AgentConfig
 
@@ -50,6 +52,7 @@ def _config(tmp_path) -> AgentConfig:
         hostname="host-a",
         username="user-a",
         queue_dir=tmp_path,
+        state_dir=tmp_path / "state",
         enabled_collectors=("computed-meta-features",),
         request_timeout_seconds=1,
     )
@@ -69,6 +72,10 @@ def test_agent_one_cycle_continues_after_collector_failure_and_queues(tmp_path, 
     assert summary.sent is False
     assert summary.queued is True
     assert agent.queue.count() == 1
+    health = json.loads(health_status_path(tmp_path / "state").read_text(encoding="utf-8"))
+    assert health["agent_id"] == "agent-1"
+    assert health["queue_depth"] == 1
+    assert health["collector_statuses"][0]["status"] == "failed"
     assert "collector wrapper raised unexpectedly" in caplog.text
     assert "00000000000000000000000000000000" not in caplog.text
 
@@ -82,7 +89,7 @@ def test_agent_retries_existing_queue_before_new_telemetry(tmp_path):
 
     summary = agent.run_once()
 
-    assert summary.queue_retry == {"attempted": 1, "sent": 1, "retained": 0}
+    assert summary.queue_retry == {"attempted": 1, "sent": 1, "retained": 0, "dead_lettered": 0}
     assert summary.sent is True
     assert summary.queued is False
     assert session.calls == 2
@@ -109,7 +116,7 @@ def test_offline_queue_contains_only_encrypted_payload_and_retries_first(tmp_pat
     agent.transport.session = session
     retry_summary = agent.run_once()
 
-    assert retry_summary.queue_retry == {"attempted": 1, "sent": 1, "retained": 0}
+    assert retry_summary.queue_retry == {"attempted": 1, "sent": 1, "retained": 0, "dead_lettered": 0}
     assert retry_summary.sent is True
     assert session.calls == 2
     assert agent.queue.count() == 0
@@ -125,3 +132,13 @@ def test_agent_main_returns_config_error_for_missing_key(monkeypatch):
     monkeypatch.setattr(agent_module, "parse_args", lambda: type("Args", (), {"once": True})())
 
     assert agent_module.main() == 2
+
+
+def test_agent_status_cli_reports_missing_health_file(monkeypatch, capsys, tmp_path):
+    from agent import agent as agent_module
+
+    monkeypatch.setenv("INSIEDR_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(agent_module, "parse_args", lambda: type("Args", (), {"once": False, "status": True})())
+
+    assert agent_module.main() == 1
+    assert "No local health status found" in capsys.readouterr().out

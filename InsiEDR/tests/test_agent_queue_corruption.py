@@ -42,7 +42,7 @@ def test_corrupted_queue_files_are_quarantined_and_skipped(tmp_path, contents):
 
     assert items == []
     assert not bad_file.exists()
-    assert (tmp_path / "bad.json.corrupt").exists()
+    assert list((tmp_path / "dead_letter").glob("bad.json.invalid*"))
 
 
 def test_corrupted_queue_file_does_not_crash_replay(tmp_path):
@@ -54,9 +54,9 @@ def test_corrupted_queue_file_does_not_crash_replay(tmp_path):
 
     summary = transport.retry_queued()
 
-    assert summary == {"attempted": 1, "sent": 1, "retained": 0}
+    assert summary == {"attempted": 1, "sent": 1, "retained": 0, "dead_lettered": 0}
     assert session.calls == 1
-    assert (tmp_path / "bad.json.corrupt").exists()
+    assert list((tmp_path / "dead_letter").glob("bad.json.invalid*"))
 
 
 def test_permission_denied_queue_file_is_safe_when_platform_can_simulate(tmp_path):

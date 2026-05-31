@@ -71,6 +71,17 @@ def test_agent_requirements_do_not_install_postgresql_driver():
     assert "postgres" not in requirements
 
 
+def test_agent_runtime_code_does_not_import_postgresql_driver():
+    runtime_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for root in (PROJECT_ROOT / "agent", PROJECT_ROOT / "shared")
+        for path in root.rglob("*.py")
+        if "__pycache__" not in path.parts
+    ).lower()
+
+    assert "psycopg2" not in runtime_text
+
+
 def test_legacy_collectors_import_without_postgresql_driver(monkeypatch):
     real_import = builtins.__import__
 

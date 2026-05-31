@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from agent.collectors.base import CollectorResult
+from agent.quality import default_feature_quality, validate_feature_quality, validate_quality_value
+from agent.timezone_utils import endpoint_timezone_metadata
 from shared.protocol import PROTOCOL_VERSION, TELEMETRY_SCHEMA, canonical_json_bytes, validate_telemetry_payload
 
 
@@ -33,6 +35,10 @@ FORBIDDEN_TELEMETRY_FIELD_PARTS = (
     _join_field("model", _join_text("pred", "iction")),
     _join_field(_join_text("anom", "aly"), "score"),
     _join_field("edr", "auth", "burst", "score"),
+    "score",
+    _join_text("mal", "icious"),
+    _join_text("sus", "picious"),
+    _join_text("detect", "ion"),
 )
 
 
@@ -92,6 +98,8 @@ def _failed_collector_result(result: Mapping[str, Any], *, default_hostname: str
         "collected_at": str(result.get("collected_at") or normalize_value(datetime.now(timezone.utc))),
         "hostname": str(result.get("hostname") or default_hostname),
         "status": "failed",
+        "quality": "unsupported",
+        "feature_quality": {},
         "error": {
             "type": "ForbiddenTelemetryField",
             "message": message,
@@ -99,10 +107,26 @@ def _failed_collector_result(result: Mapping[str, Any], *, default_hostname: str
     }
 
 
+def _ensure_quality_metadata(result: dict[str, Any]) -> dict[str, Any]:
+    default_quality = "exact" if result.get("status") == "success" else "unsupported"
+    quality = str(result.get("quality") or default_quality)
+    result["quality"] = validate_quality_value(quality)
+    payload = result.get("payload")
+    if isinstance(payload, Mapping):
+        feature_quality = result.get("feature_quality")
+        if isinstance(feature_quality, Mapping):
+            result["feature_quality"] = validate_feature_quality(feature_quality)
+        else:
+            result["feature_quality"] = default_feature_quality(payload, quality)
+    else:
+        result["feature_quality"] = {}
+    return result
+
+
 def _enforce_feature_only_result(result: dict[str, Any], *, default_hostname: str) -> dict[str, Any]:
     forbidden_path = _find_forbidden_field(result.get("payload", {}))
     if forbidden_path is None:
-        return result
+        return _ensure_quality_metadata(result)
     return _failed_collector_result(
         result,
         default_hostname=default_hostname,
@@ -127,6 +151,7 @@ def build_payload(
     success_count = sum(1 for result in normalized_results if result.get("status") == "success")
     failed_count = sum(1 for result in normalized_results if result.get("status") == "failed")
     collected = collected_at or datetime.now(timezone.utc)
+    timezone_metadata = endpoint_timezone_metadata(collected).as_dict()
 
     payload = {
         "protocol_version": PROTOCOL_VERSION,
@@ -142,6 +167,7 @@ def build_payload(
             "machine": platform.machine(),
         },
         "collected_at": normalize_value(collected),
+        **timezone_metadata,
         "collectors": normalized_results,
         "summary": {
             "collector_count": len(normalized_results),

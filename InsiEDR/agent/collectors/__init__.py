@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -28,6 +30,8 @@ def _short_term_fallback(module) -> Mapping[str, Any]:
 
 
 def _device_fallback(module) -> Mapping[str, Any]:
+    if hasattr(module, "collect"):
+        return module.collect()
     return module.derive_features(module.collect_raw_usb_telemetry())
 
 
@@ -102,6 +106,7 @@ def discover_collectors(
     *,
     collectors_dir: Path | None = None,
     hostname: str | None = None,
+    timeout_seconds: int = 30,
 ) -> list[BaseCollector]:
     base_dir = collectors_dir or COLLECTOR_DIR
     requested = [_canonical_name(item) for item in (enabled or DEFAULT_DISCOVERY_COLLECTORS)]
@@ -114,13 +119,16 @@ def discover_collectors(
             continue
         path = base_dir / spec["filename"]
         if name == "computed-meta-features":
-            collectors.append(ComputedMetaFeatureCollector(path=path, hostname=hostname))
+            collectors.append(
+                ComputedMetaFeatureCollector(path=path, hostname=hostname, timeout_seconds=timeout_seconds)
+            )
         else:
             collectors.append(
                 PythonModuleCollector(
                     name=name,
                     path=path,
                     hostname=hostname,
+                    timeout_seconds=timeout_seconds,
                     fallback=spec.get("fallback"),
                 )
             )
@@ -128,16 +136,49 @@ def discover_collectors(
 
 
 def run_collectors(collectors: Iterable[BaseCollector]) -> list[CollectorResult]:
-    results: list[CollectorResult] = []
+    collector_list = list(collectors)
+    results: list[CollectorResult | None] = [None] * len(collector_list)
+    lock = threading.Lock()
     context: dict[str, Any] = {"results": results}
-    for collector in collectors:
+
+    def collect_one(index: int, collector: BaseCollector) -> None:
         try:
             result = collector.collect(context)
         except BaseException as exc:
             log.exception("collector wrapper raised unexpectedly: %s", collector.name)
             result = collector.failed(exc)
-        results.append(result)
-    return results
+        with lock:
+            if results[index] is None:
+                results[index] = result
+
+    threads: list[threading.Thread] = []
+    deadlines: list[float] = []
+    started = time.monotonic()
+    for index, collector in enumerate(collector_list):
+        thread = threading.Thread(
+            target=collect_one,
+            args=(index, collector),
+            name=f"insiedr-collector-{collector.name}",
+            daemon=True,
+        )
+        threads.append(thread)
+        deadlines.append(started + max(1, int(getattr(collector, "timeout_seconds", 30))))
+        thread.start()
+
+    for index, (collector, thread, deadline) in enumerate(zip(collector_list, threads, deadlines)):
+        remaining = max(0.0, deadline - time.monotonic())
+        thread.join(remaining)
+        if thread.is_alive():
+            with lock:
+                if results[index] is None:
+                    timeout_seconds = max(1, int(getattr(collector, "timeout_seconds", 30)))
+                    results[index] = collector.failed(
+                        f"collector exceeded timeout of {timeout_seconds} seconds",
+                        error_type="CollectorTimeout",
+                        quality="unsupported",
+                    )
+
+    return [result if result is not None else collector.failed("collector did not return") for result, collector in zip(results, collector_list)]
 
 
 __all__ = [
