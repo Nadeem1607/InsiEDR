@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InsiEDR Dashboard</title>
+    <style>
+      :root { color-scheme: light; font-family: Arial, sans-serif; background: #f6f7f9; color: #18212f; }
+      body { margin: 0; }
+      header { background: #ffffff; border-bottom: 1px solid #d9dde5; padding: 18px 24px; }
+      h1 { font-size: 24px; margin: 0; letter-spacing: 0; }
+      main { max-width: 1180px; margin: 0 auto; padding: 20px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+      .card { background: #ffffff; border: 1px solid #d9dde5; border-radius: 8px; padding: 14px; min-height: 92px; }
+      .label { color: #5c6678; font-size: 12px; text-transform: uppercase; }
+      .value { font-size: 28px; margin-top: 8px; }
+      section { margin-top: 22px; }
+      table { width: 100%; border-collapse: collapse; background: #ffffff; border: 1px solid #d9dde5; }
+      th, td { text-align: left; border-bottom: 1px solid #e7eaf0; padding: 10px; font-size: 14px; vertical-align: top; }
+      th { background: #eef1f6; color: #344055; }
+      .note { color: #5c6678; font-size: 13px; line-height: 1.4; }
+      .status { display: inline-block; padding: 2px 7px; border-radius: 999px; background: #e8f2ee; color: #17664a; }
+      .warn { background: #fff2d6; color: #795100; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>InsiEDR Dashboard</h1>
+    </header>
+    <main>
+      <div class="grid" id="summary"></div>
+
+      <section>
+        <h2>Recent Ingestion</h2>
+        <table>
+          <thead><tr><th>Payload</th><th>Agent</th><th>Host</th><th>User</th><th>Status</th><th>Received</th></tr></thead>
+          <tbody id="logs"><tr><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Agent Health</h2>
+        <table>
+          <thead><tr><th>Agent</th><th>Host</th><th>User</th><th>OS</th><th>Last Seen</th><th>Status</th></tr></thead>
+          <tbody id="agents"><tr><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Data Quality Notes</h2>
+        <p class="note">
+          File copy and removable-path features are heuristic observations. USB byte-transfer fields remain verify-required until byte telemetry is populated.
+          HTTP features are browser-history scoped, and network monitor data is passive optional metadata.
+        </p>
+      </section>
+    </main>
+    <script>
+      async function getJson(url) {
+        const response = await fetch(url);
+        return response.json();
+      }
+      function text(value) {
+        return value === null || value === undefined || value === "" ? "-" : String(value);
+      }
+      async function loadDashboard() {
+        const [stats, logs, agents, health] = await Promise.all([
+          getJson("/api/stats"),
+          getJson("/api/logs?limit=10"),
+          getJson("/api/agents?limit=10"),
+          getJson("/api/health")
+        ]);
+        const summary = document.getElementById("summary");
+        summary.innerHTML = [
+          ["Agents", stats.agents || 0],
+          ["Payloads", stats.logs || 0],
+          ["Collector Results", stats.collector_results || 0],
+          ["Anomalies", stats.anomalies || 0],
+          ["Database", health.database],
+          ["Crypto", health.crypto]
+        ].map(([label, value]) => `<div class="card"><div class="label">${label}</div><div class="value">${text(value)}</div></div>`).join("");
+
+        document.getElementById("logs").innerHTML = (logs.logs || []).map(row => `
+          <tr>
+            <td>${text(row.payload_id)}</td><td>${text(row.agent_id)}</td><td>${text(row.hostname)}</td>
+            <td>${text(row.username)}</td><td><span class="status">${text(row.validation_status)}</span></td><td>${text(row.received_at)}</td>
+          </tr>`).join("") || "<tr><td colspan=\"6\">No ingested payloads yet.</td></tr>";
+
+        document.getElementById("agents").innerHTML = (agents.agents || []).map(row => `
+          <tr>
+            <td>${text(row.agent_id)}</td><td>${text(row.hostname)}</td><td>${text(row.username_last_seen)}</td>
+            <td>${text(row.os_system)} ${text(row.os_release)}</td><td>${text(row.last_seen_at)}</td>
+            <td><span class="status">${text(row.status)}</span></td>
+          </tr>`).join("") || "<tr><td colspan=\"6\">No agents seen yet.</td></tr>";
+      }
+      loadDashboard().catch(() => {
+        document.getElementById("summary").innerHTML = "<div class=\"card\"><div class=\"label\">Dashboard</div><div class=\"value warn\">Unavailable</div></div>";
+      });
+    </script>
+  </body>
+</html>

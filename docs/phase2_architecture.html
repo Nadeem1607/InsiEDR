@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InsiEDR Phase 2 — Plugin Architecture Design Proposal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
+
+  :root {
+    --bg-primary: #0a0e17;
+    --bg-secondary: #111827;
+    --bg-card: #1a2332;
+    --bg-card-hover: #1f2b3d;
+    --border: #2a3a50;
+    --border-accent: #3b82f6;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-blue: #3b82f6;
+    --accent-cyan: #06b6d4;
+    --accent-green: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-red: #ef4444;
+    --accent-purple: #8b5cf6;
+    --accent-pink: #ec4899;
+    --glow-blue: rgba(59, 130, 246, 0.15);
+    --glow-cyan: rgba(6, 182, 212, 0.1);
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --serif: 'DM Serif Display', serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+
+  /* Navigation */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(10, 14, 23, 0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--accent-cyan);
+    letter-spacing: 0.5px;
+  }
+  .nav-brand span { color: var(--text-muted); font-weight: 400; }
+  .nav-links { display: flex; gap: 0.25rem; }
+  .nav-links a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 12px;
+    font-family: var(--mono);
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .nav-links a:hover { color: var(--text-primary); background: var(--bg-card); }
+
+  /* Main */
+  main { max-width: 1100px; margin: 0 auto; padding: 80px 2rem 4rem; }
+
+  /* Hero */
+  .hero {
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 3rem;
+  }
+  .hero-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent-cyan);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hero-label::before {
+    content: '';
+    width: 24px; height: 1px;
+    background: var(--accent-cyan);
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-size: 2.8rem;
+    font-weight: 400;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero-sub {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    max-width: 680px;
+    line-height: 1.8;
+  }
+  .hero-meta {
+    display: flex; gap: 2rem; margin-top: 1.5rem;
+    font-family: var(--mono); font-size: 12px; color: var(--text-muted);
+  }
+  .hero-meta strong { color: var(--text-secondary); }
+
+  /* Section */
+  .section { margin-bottom: 3.5rem; }
+  .section-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent-blue);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .section h2 {
+    font-family: var(--serif);
+    font-size: 1.8rem;
+    font-weight: 400;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+  }
+  .section h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--text-primary);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section h3 .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; flex-shrink: 0;
+  }
+  .section p {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    max-width: 800px;
+  }
+
+  /* Cards */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    transition: all 0.2s;
+  }
+  .card:hover {
+    border-color: var(--border-accent);
+    background: var(--bg-card-hover);
+  }
+  .card-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 0.75rem;
+  }
+  .card-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .card-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+  }
+  .card-subtitle {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+  .card-body {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .card-body code {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-cyan);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* Plugin cards */
+  .plugin-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 1rem 0;
+    overflow: hidden;
+  }
+  .plugin-card-head {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .plugin-card-head:hover { background: var(--bg-card-hover); }
+  .plugin-card-head-left {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .plugin-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .badge-core { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+  .badge-detect { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); }
+  .badge-crypto { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+  .badge-store { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+  .badge-ui { background: rgba(236, 72, 153, 0.15); color: var(--accent-pink); }
+  .badge-p3 { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+  .plugin-card-title { font-weight: 600; font-size: 0.95rem; }
+  .plugin-card-body { padding: 1.25rem; display: none; }
+  .plugin-card.open .plugin-card-body { display: block; }
+  .plugin-card.open .plugin-card-head { background: var(--bg-card-hover); }
+  .toggle-icon { color: var(--text-muted); font-family: var(--mono); font-size: 14px; transition: transform 0.2s; }
+  .plugin-card.open .toggle-icon { transform: rotate(90deg); }
+
+  /* Code blocks */
+  .code-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 1rem 0;
+    position: relative;
+  }
+  .code-block-header {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .code-block pre {
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .code-block .kw { color: var(--accent-purple); }
+  .code-block .fn { color: var(--accent-blue); }
+  .code-block .str { color: var(--accent-green); }
+  .code-block .cm { color: var(--text-muted); font-style: italic; }
+  .code-block .tp { color: var(--accent-cyan); }
+  .code-block .dc { color: var(--accent-amber); }
+
+  /* Flow diagram */
+  .flow-diagram {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+  .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: nowrap;
+    margin: 0.5rem 0;
+  }
+  .flow-node {
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    border: 1px solid;
+    min-width: 140px;
+  }
+  .flow-arrow {
+    font-family: var(--mono);
+    color: var(--text-muted);
+    font-size: 18px;
+    padding: 0 8px;
+    flex-shrink: 0;
+  }
+  .flow-arrow-down {
+    text-align: center;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    font-size: 18px;
+    padding: 4px 0;
+  }
+  .fn-agent { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: var(--accent-blue); }
+  .fn-crypto { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: var(--accent-amber); }
+  .fn-feature { background: rgba(6, 182, 212, 0.1); border-color: rgba(6, 182, 212, 0.3); color: var(--accent-cyan); }
+  .fn-baseline { background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); color: var(--accent-purple); }
+  .fn-detect { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: var(--accent-green); }
+  .fn-risk { background: rgba(236, 72, 153, 0.1); border-color: rgba(236, 72, 153, 0.3); color: var(--accent-pink); }
+  .fn-dash { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: var(--accent-red); }
+  .fn-store { background: rgba(255,255,255,0.03); border-color: var(--border); color: var(--text-secondary); }
+
+  /* Table */
+  .spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+  .spec-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+  .spec-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(42, 58, 80, 0.5);
+    color: var(--text-secondary);
+    vertical-align: top;
+  }
+  .spec-table td:first-child {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent-cyan);
+    white-space: nowrap;
+  }
+  .spec-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    margin: 1px 2px;
+  }
+  .tag-p2 { background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); }
+  .tag-p3 { background: rgba(239, 68, 68, 0.1); color: var(--accent-red); }
+  .tag-core { background: rgba(16, 185, 129, 0.1); color: var(--accent-green); }
+
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2.5rem 0;
+  }
+
+  /* File tree */
+  .file-tree {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  .file-tree .dir { color: var(--accent-blue); font-weight: 600; }
+  .file-tree .file { color: var(--text-secondary); }
+  .file-tree .iface { color: var(--accent-cyan); }
+  .file-tree .comment { color: var(--text-muted); font-style: italic; }
+
+  /* Alert box */
+  .alert {
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+    display: flex; gap: 10px;
+    align-items: flex-start;
+  }
+  .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+  .alert-info {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: var(--text-secondary);
+  }
+  .alert-warn {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    color: var(--text-secondary);
+  }
+  .alert-p3 {
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--text-secondary);
+  }
+
+  /* Phase indicator */
+  .phase-ind {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 4px;
+    letter-spacing: 0.3px;
+  }
+  .phase-2 { background: rgba(59, 130, 246, 0.12); color: var(--accent-blue); }
+  .phase-3 { background: rgba(239, 68, 68, 0.12); color: var(--accent-red); }
+
+  /* Confidence */
+  .confidence-bar {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .confidence-bar-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .confidence-bar-track {
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .confidence-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+    transition: width 1s ease;
+  }
+  .confidence-bar-value {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+  }
+  .confidence-bar-value span { font-size: 14px; color: var(--text-muted); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    main { padding: 70px 1rem 2rem; }
+    .hero h1 { font-size: 1.8rem; }
+    .card-grid { grid-template-columns: 1fr; }
+    .flow-row { flex-wrap: wrap; justify-content: center; }
+    .nav-links { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">INSIEDR <span>// Phase 2 Architecture</span></div>
+  <div class="nav-links">
+    <a href="#overview">Overview</a>
+    <a href="#dataflow">Data Flow</a>
+    <a href="#plugins">Plugins</a>
+    <a href="#interfaces">Interfaces</a>
+    <a href="#tree">File Tree</a>
+    <a href="#features">Features</a>
+    <a href="#phase3">Phase 3</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-label">Architecture Design Proposal</div>
+  <h1>Plugin-Based Insider Threat Detection System</h1>
+  <p class="hero-sub">
+    Complete Phase 2 architecture evolving the existing agent-server-ML pipeline into a
+    fully extensible plugin system with per-user behavioral baselining, multi-detector
+    ensemble deviation engine, AES-GCM encrypted ingestion, risk aggregation with
+    cross-signal correlation, and an explainable SOC dashboard — all with forward hooks
+    for Phase 3 federation and LSTM forecasting.
+  </p>
+  <div class="hero-meta">
+    <div><strong>Phase:</strong> 2 (Production)</div>
+    <div><strong>Base:</strong> Phase 1 Codebase</div>
+    <div><strong>Agents:</strong> 12 Endpoints</div>
+    <div><strong>Model:</strong> Centralized Analysis</div>
+  </div>
+</div>
+
+<!-- 1. CONTEXT CHECK -->
+<div class="section" id="overview">
+  <div class="section-id">§1 — Context Integration</div>
+  <h2>Phase 1 Foundation Mapping</h2>
+  <p>
+    Every Phase 1 component is preserved and extended — <code>agent.py</code> becomes the
+    feature collector feeding into the crypto plugin layer; <code>app.py</code> transforms into a
+    thin orchestrator delegating to plugin registries; <code>ml_integration_simple.py</code>
+    (Random Forest + Isolation Forest) becomes the first of N detection plugins; and
+    <code>dashboard.html</code> is rebuilt as an explainable SOC interface consuming enriched
+    deviation data via the existing Socket.IO channel.
+  </p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon fn-agent">A</div>
+        <div>
+          <div class="card-title">agent.py → Agent Plugin Host</div>
+          <div class="card-subtitle">FEATURE COLLECTOR</div>
+        </div>
+      </div>
+      <div class="card-body">
+        Retains all Phase 1 collectors (file scan, browser history, USB, login events,
+        Outlook, screenshots). Adds: AES-GCM transport encryption plugin replacing
+        Fernet, <code>ProcessWatcher</code> for CERT 4.2 process execution tracking,
+        idle-time calculator for session baselining, and a plugin loader that discovers
+        collector modules from <code>agent/plugins/</code>.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon fn-crypto">E</div>
+        <div>
+          <div class="card-title">Fernet → AES-256-GCM</div>
+          <div class="card-subtitle">ENCRYPTED INGESTION</div>
+        </div>
+      </div>
+      <div class="card-body">
+        Phase 1's Fernet encryption is replaced by authenticated AES-256-GCM providing
+        both confidentiality and integrity in a single primitive. HMAC signing is retained
+        as a secondary integrity check. The crypto interface is pluggable — Fernet remains
+        as a fallback plugin for backward-compat during migration.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon fn-detect">D</div>
+        <div>
+          <div class="card-title">ml_integration_simple → Detector Registry</div>
+          <div class="card-subtitle">DEVIATION ENGINE</div>
+        </div>
+      </div>
+      <div class="card-body">
+        The existing Random Forest / Isolation Forest model becomes
+        <code>RandomForestDetector</code> plugin. Added: <code>ZScoreDetector</code> for
+        statistical deviation, <code>IsolationForestDetector</code> standalone,
+        <code>AutoencoderDetector</code> stub, and Phase 3 hook for <code>LSTMForecaster</code>.
+        All implement <code>BaseDetector</code> with identical I/O contracts.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon fn-dash">S</div>
+        <div>
+          <div class="card-title">dashboard.html → Explainable SOC UI</div>
+          <div class="card-subtitle">DASHBOARD</div>
+        </div>
+      </div>
+      <div class="card-body">
+        Phase 1's basic log viewer becomes a full SOC dashboard showing baseline vs.
+        current behavior per user, per-feature deviation heatmaps, ensemble detector
+        agreement visualization, risk trend timelines, and drill-down alert investigation
+        panels. Real-time via existing Socket.IO.
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- 2. CORE ARCHITECTURE PRINCIPLES -->
+<div class="section">
+  <div class="section-id">§2 — Core Principles</div>
+  <h2>Plugin Architecture Design Principles</h2>
+
+  <h3><span class="dot" style="background:var(--accent-blue)"></span> Principle 1: Contract-Driven Plugins</h3>
+  <p>
+    Every plugin category (crypto, feature extraction, detection, storage) defines a Python
+    Abstract Base Class (ABC) with mandatory method signatures and typed return contracts.
+    Plugins are loaded by scanning directories for classes inheriting the correct ABC — no
+    registration boilerplate needed. Each plugin declares a <code>name</code>,
+    <code>version</code>, and <code>enabled</code> flag via class attributes.
+  </p>
+
+  <h3><span class="dot" style="background:var(--accent-green)"></span> Principle 2: Ensemble-First Detection</h3>
+  <p>
+    No single detector produces alerts. The risk aggregator receives deviation scores from
+    all active detector plugins and applies configurable voting logic (default: 2-of-N
+    agreement for Medium, all-agree for High). This directly addresses the "reduce false
+    positives" goal. Each detector outputs per-feature deviation scores enabling
+    explainability at the dashboard layer.
+  </p>
+
+  <h3><span class="dot" style="background:var(--accent-amber)"></span> Principle 3: Behavioral Baselines, Not Thresholds</h3>
+  <p>
+    Per the project specification: no static scoring. The baseline engine maintains
+    per-user exponential moving averages (EMA) with configurable decay, standard deviation
+    tracking, and time-of-day bucketing. Detection is always "deviation from THIS user's
+    norm" — never "value exceeds global threshold X." The baseline adapts dynamically as
+    legitimate behavior evolves.
+  </p>
+
+  <h3><span class="dot" style="background:var(--accent-purple)"></span> Principle 4: Phase 3 Forward-Compatible Hooks</h3>
+  <p>
+    Every plugin interface includes extension points that Phase 3 modules will consume
+    without modifying Phase 2 code. The storage interface abstracts SQLite behind a DAO
+    allowing PostgreSQL swap. The detection interface supports async prediction for future
+    LSTM. The agent plugin loader supports remote plugin delivery. The risk aggregator
+    exposes a federation API stub.
+  </p>
+</div>
+
+<hr class="divider">
+
+<!-- 3. DATA FLOW -->
+<div class="section" id="dataflow">
+  <div class="section-id">§3 — Data Flow Pipeline</div>
+  <h2>End-to-End Request Lifecycle</h2>
+  <p>
+    Each telemetry cycle follows this exact path through the plugin pipeline. Every stage
+    is a distinct plugin boundary with typed inputs and outputs.
+  </p>
+
+  <div class="flow-diagram">
+    <!-- Row 1: Agent side -->
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-muted);text-align:center;margin-bottom:12px;letter-spacing:1px;">
+      ENDPOINT (agent.py)
+    </div>
+    <div class="flow-row">
+      <div class="flow-node fn-agent">Collector Plugins<br><span style="font-size:10px;opacity:0.7">file / net / usb / session</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node fn-agent">Payload Builder<br><span style="font-size:10px;opacity:0.7">build_payload()</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node fn-crypto">AES-GCM Encrypt<br><span style="font-size:10px;opacity:0.7">+ HMAC sign</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node fn-store">Retry / Queue<br><span style="font-size:10px;opacity:0.7">SQLite fallback</span></div>
+    </div>
+
+    <div class="flow-arrow-down">↓ HTTPS POST /api/logs</div>
+
+    <!-- Row 2: Server ingestion -->
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-muted);text-align:center;margin:12px 0;letter-spacing:1px;">
+      SERVER (app.py — Orchestrator)
+    </div>
+    <div class="flow-row">
+      <div class="flow-node fn-crypto">Crypto Plugin<br><span style="font-size:10px;opacity:0.7">verify + decrypt</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node fn-feature">Feature Extractor<br><span style="font-size:10px;opacity:0.7">CERT + LANL plugins</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node fn-baseline">Baseline Engine<br><span style="font-size:10px;opacity:0.7">EMA per-user lookup</span></div>
+    </div>
+
+    <div class="flow-arrow-down">↓ (features, baseline) tuple</div>
+
+    <!-- Row 3: Detection -->
+    <div class="flow-row">
+      <div class="flow-node fn-detect">Detector 1<br><span style="font-size:10px;opacity:0.7">RandomForest</span></div>
+      <div class="flow-node fn-detect" style="margin-left:8px">Detector 2<br><span style="font-size:10px;opacity:0.7">Z-Score</span></div>
+      <div class="flow-node fn-detect" style="margin-left:8px">Detector 3<br><span style="font-size:10px;opacity:0.7">IsolationForest</span></div>
+      <div class="flow-node fn-detect" style="margin-left:8px;opacity:0.5;border-style:dashed">Detector N<br><span style="font-size:10px;opacity:0.7">LSTM (Phase 3)</span></div>
+    </div>
+
+    <div class="flow-arrow-down">↓ List[DetectorResult]</div>
+
+    <!-- Row 4: Aggregation + Output -->
+    <div class="flow-row">
+      <div class="flow-node fn-risk">Risk Aggregator<br><span style="font-size:10px;opacity:0.7">ensemble + correlate</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node fn-store">Storage Plugin<br><span style="font-size:10px;opacity:0.7">SQLite / Postgres</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node fn-dash">Socket.IO Emit<br><span style="font-size:10px;opacity:0.7">→ Dashboard</span></div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- 4. PLUGIN INTERFACES -->
+<div class="section" id="interfaces">
+  <div class="section-id">§4 — Plugin Interface Contracts</div>
+  <h2>Abstract Base Classes</h2>
+  <p>
+    Each plugin category is defined by an ABC. Plugins are discovered at startup by scanning
+    the corresponding directory for classes that inherit the ABC and have <code>enabled = True</code>.
+  </p>
+
+  <!-- 4.1 CryptoPlugin -->
+  <div class="plugin-card open" onclick="this.classList.toggle('open')">
+    <div class="plugin-card-head">
+      <div class="plugin-card-head-left">
+        <span class="plugin-badge badge-crypto">CRYPTO</span>
+        <span class="plugin-card-title">BaseCryptoPlugin</span>
+      </div>
+      <span class="toggle-icon">▸</span>
+    </div>
+    <div class="plugin-card-body">
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>server/crypto/base.py</span>
+          <span>ABC</span>
+        </div>
+        <pre><span class="kw">from</span> abc <span class="kw">import</span> ABC, abstractmethod
+<span class="kw">from</span> dataclasses <span class="kw">import</span> dataclass
+
+<span class="dc">@dataclass</span>
+<span class="kw">class</span> <span class="tp">DecryptResult</span>:
+    payload: <span class="tp">dict</span>           <span class="cm"># Decrypted JSON payload</span>
+    integrity_ok: <span class="tp">bool</span>      <span class="cm"># HMAC/GCM auth tag verified</span>
+    plugin_used: <span class="tp">str</span>        <span class="cm"># Name of crypto plugin that handled it</span>
+
+<span class="kw">class</span> <span class="tp">BaseCryptoPlugin</span>(ABC):
+    name: <span class="tp">str</span> = <span class="str">"base"</span>
+    version: <span class="tp">str</span> = <span class="str">"0.0.0"</span>
+    enabled: <span class="tp">bool</span> = <span class="kw">True</span>
+
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">encrypt</span>(self, payload_bytes: <span class="tp">bytes</span>, key: <span class="tp">bytes</span>) -> <span class="tp">bytes</span>:
+        <span class="cm">"""Encrypt payload bytes. Returns ciphertext."""</span>
+        ...
+
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">decrypt</span>(self, ciphertext: <span class="tp">bytes</span>, key: <span class="tp">bytes</span>) -> <span class="tp">DecryptResult</span>:
+        <span class="cm">"""Decrypt and verify. Returns DecryptResult."""</span>
+        ...
+
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">can_handle</span>(self, header_hint: <span class="tp">str</span>) -> <span class="tp">bool</span>:
+        <span class="cm">"""Return True if this plugin handles the given crypto scheme."""</span>
+        ...</pre>
+      </div>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ</span>
+        <div>
+          <strong>Phase 2 implementations:</strong> <code>AESGCMPlugin</code> (primary),
+          <code>FernetPlugin</code> (backward-compat), <code>PlaintextPlugin</code> (testing only).
+          The server iterates plugins calling <code>can_handle()</code> on each incoming request's
+          <code>X-CRYPTO-SCHEME</code> header to select the correct decryptor.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.2 FeatureExtractor -->
+  <div class="plugin-card" onclick="this.classList.toggle('open')">
+    <div class="plugin-card-head">
+      <div class="plugin-card-head-left">
+        <span class="plugin-badge badge-core">FEATURE</span>
+        <span class="plugin-card-title">BaseFeatureExtractor</span>
+      </div>
+      <span class="toggle-icon">▸</span>
+    </div>
+    <div class="plugin-card-body">
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>server/features/base.py</span>
+          <span>ABC</span>
+        </div>
+        <pre><span class="kw">from</span> abc <span class="kw">import</span> ABC, abstractmethod
+<span class="kw">from</span> typing <span class="kw">import</span> Dict, List
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">class</span> <span class="tp">BaseFeatureExtractor</span>(ABC):
+    name: <span class="tp">str</span> = <span class="str">"base"</span>
+    version: <span class="tp">str</span> = <span class="str">"0.0.0"</span>
+    enabled: <span class="tp">bool</span> = <span class="kw">True</span>
+
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">feature_names</span>(self) -> <span class="tp">List[str]</span>:
+        <span class="cm">"""Return ordered list of feature names this extractor produces."""</span>
+        ...
+
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">extract</span>(self, payload: <span class="tp">dict</span>) -> <span class="tp">Dict[str, float]</span>:
+        <span class="cm">"""Extract features from raw agent payload.
+        Returns dict mapping feature_name → float value."""</span>
+        ...
+
+    <span class="kw">def</span> <span class="fn">extract_array</span>(self, payload: <span class="tp">dict</span>) -> <span class="tp">np.ndarray</span>:
+        <span class="cm">"""Convenience: returns features as ordered numpy array."""</span>
+        feats = self.extract(payload)
+        <span class="kw">return</span> np.array([feats.get(n, 0.0) <span class="kw">for</span> n <span class="kw">in</span> self.feature_names()])</pre>
+      </div>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ</span>
+        <div>
+          <strong>Phase 2 implementations:</strong> <code>CERTBehavioralExtractor</code> (long-term:
+          logon_count, file_count, usb_count, email_count, http_count, afterhour_activity,
+          afterhour_files, workhour_activity) and <code>LANLEDRExtractor</code> (short-term:
+          auth_event_count, auth_success_ratio, dest_diversity, offhour_flag, weekend_flag,
+          auth_burst_score, logon_type_variety). Each detector plugin declares which
+          extractor(s) it consumes.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.3 BaselineEngine -->
+  <div class="plugin-card" onclick="this.classList.toggle('open')">
+    <div class="plugin-card-head">
+      <div class="plugin-card-head-left">
+        <span class="plugin-badge badge-store">BASELINE</span>
+        <span class="plugin-card-title">BaselineEngine</span>
+      </div>
+      <span class="toggle-icon">▸</span>
+    </div>
+    <div class="plugin-card-body">
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>server/baseline/engine.py</span>
+          <span>CORE MODULE</span>
+        </div>
+        <pre><span class="dc">@dataclass</span>
+<span class="kw">class</span> <span class="tp">UserBaseline</span>:
+    user: <span class="tp">str</span>
+    feature_means: <span class="tp">Dict[str, float]</span>     <span class="cm"># EMA means per feature</span>
+    feature_stds: <span class="tp">Dict[str, float]</span>      <span class="cm"># EMA standard deviations</span>
+    sample_count: <span class="tp">int</span>                    <span class="cm"># Total observations</span>
+    hour_profiles: <span class="tp">Dict[int, Dict]</span>      <span class="cm"># Time-of-day buckets (0-23)</span>
+    last_updated: <span class="tp">str</span>                    <span class="cm"># ISO timestamp</span>
+    decay_factor: <span class="tp">float</span> = 0.05           <span class="cm"># EMA alpha (configurable)</span>
+
+<span class="kw">class</span> <span class="tp">BaselineEngine</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, storage: <span class="tp">BaseStorage</span>, decay: <span class="tp">float</span> = 0.05): ...
+
+    <span class="kw">def</span> <span class="fn">get_baseline</span>(self, user: <span class="tp">str</span>) -> <span class="tp">Optional[UserBaseline]</span>:
+        <span class="cm">"""Retrieve current baseline for user. Returns None if &lt; min_samples."""</span>
+        ...
+
+    <span class="kw">def</span> <span class="fn">update_baseline</span>(self, user: <span class="tp">str</span>, features: <span class="tp">Dict[str, float]</span>, hour: <span class="tp">int</span>):
+        <span class="cm">"""Update EMA baseline with new observation.
+        Uses Welford's algorithm for online mean/std."""</span>
+        ...
+
+    <span class="kw">def</span> <span class="fn">get_deviation_vector</span>(self, user: <span class="tp">str</span>, features: <span class="tp">Dict[str, float]</span>) -> <span class="tp">Dict[str, float]</span>:
+        <span class="cm">"""Returns per-feature z-scores against user baseline.
+        Positive = above normal, negative = below. None features = 0."""</span>
+        ...
+
+    <span class="kw">def</span> <span class="fn">get_rolling_window</span>(self, user: <span class="tp">str</span>, days: <span class="tp">int</span> = 7) -> <span class="tp">Dict</span>:
+        <span class="cm">"""7-day rolling risk metrics for CERT 4.2 compliance."""</span>
+        ...</pre>
+      </div>
+      <div class="alert alert-warn">
+        <span class="alert-icon">⚠</span>
+        <div>
+          <strong>Design note:</strong> The baseline engine is NOT a plugin — it is a core
+          singleton. All detector plugins receive baseline data through it. This prevents
+          inconsistent baselines across detectors. The engine's <code>decay_factor</code> is
+          configurable per-deployment via <code>BASELINE_DECAY</code> env var (default 0.05 =
+          ~20 observations half-life).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.4 DetectorPlugin -->
+  <div class="plugin-card" onclick="this.classList.toggle('open')">
+    <div class="plugin-card-head">
+      <div class="plugin-card-head-left">
+        <span class="plugin-badge badge-detect">DETECTOR</span>
+        <span class="plugin-card-title">BaseDetector</span>
+      </div>
+      <span class="toggle-icon">▸</span>
+    </div>
+    <div class="plugin-card-body">
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>server/detectors/base.py</span>
+          <span>ABC — MOST CRITICAL INTERFACE</span>
+        </div>
+        <pre><span class="dc">@dataclass</span>
+<span class="kw">class</span> <span class="tp">DetectorResult</span>:
+    detector_name: <span class="tp">str</span>                        <span class="cm"># "zscore", "random_forest", etc.</span>
+    is_anomaly: <span class="tp">bool</span>                           <span class="cm"># Binary flag</span>
+    confidence: <span class="tp">float</span>                          <span class="cm"># 0.0-1.0 confidence in prediction</span>
+    feature_scores: <span class="tp">Dict[str, float]</span>           <span class="cm"># Per-feature deviation magnitude</span>
+    top_features: <span class="tp">List[Tuple[str, float]]</span>      <span class="cm"># Top 3 contributing features (sorted)</span>
+    metadata: <span class="tp">Dict</span>                              <span class="cm"># Detector-specific extra data</span>
+    timestamp: <span class="tp">str</span>                              <span class="cm"># ISO timestamp of analysis</span>
+
+<span class="kw">class</span> <span class="tp">BaseDetector</span>(ABC):
+    name: <span class="tp">str</span> = <span class="str">"base"</span>
+    version: <span class="tp">str</span> = <span class="str">"0.0.0"</span>
+    enabled: <span class="tp">bool</span> = <span class="kw">True</span>
+    requires_baseline: <span class="tp">bool</span> = <span class="kw">True</span>           <span class="cm"># Does this detector need baseline?</span>
+    required_extractors: <span class="tp">List[str]</span> = []       <span class="cm"># e.g., ["cert_behavioral"]</span>
+    weight: <span class="tp">float</span> = 1.0                       <span class="cm"># Ensemble voting weight</span>
+
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">detect</span>(
+        self,
+        features: <span class="tp">Dict[str, float]</span>,
+        baseline: <span class="tp">Optional[UserBaseline]</span>,
+        context: <span class="tp">Dict</span>                           <span class="cm"># user, hour, agent_id, history</span>
+    ) -> <span class="tp">DetectorResult</span>:
+        <span class="cm">"""Run detection. MUST return DetectorResult, never raise."""</span>
+        ...
+
+    <span class="kw">def</span> <span class="fn">on_load</span>(self, config: <span class="tp">Dict</span>):
+        <span class="cm">"""Called once at startup. Load model files, warm caches."""</span>
+        <span class="kw">pass</span>
+
+    <span class="kw">def</span> <span class="fn">on_reload</span>(self):
+        <span class="cm">"""Called on SIGHUP. Hot-reload model without restart."""</span>
+        <span class="kw">pass</span></pre>
+      </div>
+      <p style="margin-top:1rem">
+        <strong>Phase 2 detector plugins:</strong>
+      </p>
+      <table class="spec-table">
+        <thead><tr><th>Plugin</th><th>Method</th><th>Baseline?</th><th>Extractor</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>ZScoreDetector</td>
+            <td>Per-feature z-score against user EMA baseline. Flags features &gt; 2.5σ</td>
+            <td>Yes</td>
+            <td>cert_behavioral</td>
+            <td>1.0</td>
+          </tr>
+          <tr>
+            <td>RandomForestDetector</td>
+            <td>Migrated Phase 1 model. Supervised classification with predict_proba</td>
+            <td>No (uses raw)</td>
+            <td>cert_behavioral</td>
+            <td>1.2</td>
+          </tr>
+          <tr>
+            <td>IsolationForestDetector</td>
+            <td>Unsupervised anomaly scoring. score_samples → risk</td>
+            <td>No</td>
+            <td>cert_behavioral</td>
+            <td>0.8</td>
+          </tr>
+          <tr>
+            <td>AuthBurstDetector</td>
+            <td>LANL-specific: auth frequency bursts, destination diversity spikes</td>
+            <td>Yes</td>
+            <td>lanl_edr</td>
+            <td>1.0</td>
+          </tr>
+          <tr style="opacity:0.5">
+            <td>LSTMForecaster</td>
+            <td>Next-day behavior prediction + deviation (Phase 3 stub)</td>
+            <td>Yes (7-day)</td>
+            <td>cert_behavioral</td>
+            <td>1.5</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 4.5 RiskAggregator -->
+  <div class="plugin-card" onclick="this.classList.toggle('open')">
+    <div class="plugin-card-head">
+      <div class="plugin-card-head-left">
+        <span class="plugin-badge badge-ui">RISK</span>
+        <span class="plugin-card-title">RiskAggregator</span>
+      </div>
+      <span class="toggle-icon">▸</span>
+    </div>
+    <div class="plugin-card-body">
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>server/risk/aggregator.py</span>
+          <span>CORE MODULE</span>
+        </div>
+        <pre><span class="dc">@dataclass</span>
+<span class="kw">class</span> <span class="tp">RiskVerdict</span>:
+    user: <span class="tp">str</span>
+    risk_level: <span class="tp">str</span>                         <span class="cm"># "Low" | "Medium" | "High" | "Critical"</span>
+    risk_score: <span class="tp">float</span>                        <span class="cm"># 0-100 aggregated score</span>
+    is_anomaly: <span class="tp">bool</span>                          <span class="cm"># Final ensemble verdict</span>
+    detectors_triggered: <span class="tp">List[str]</span>            <span class="cm"># Which detectors flagged anomaly</span>
+    agreement_ratio: <span class="tp">float</span>                    <span class="cm"># 0.0-1.0 (e.g., 3/4 = 0.75)</span>
+    top_deviations: <span class="tp">List[Dict]</span>                <span class="cm"># Merged top features across detectors</span>
+    correlated_signals: <span class="tp">List[str]</span>             <span class="cm"># e.g., ["afterhour+usb", "file+network"]</span>
+    baseline_comparison: <span class="tp">Dict[str, Dict]</span>     <span class="cm"># {feature: {baseline:X, current:Y, zscore:Z}}</span>
+    timestamp: <span class="tp">str</span>
+
+<span class="kw">class</span> <span class="tp">RiskAggregator</span>:
+    <span class="cm"># Correlation rules: pairs of features that amplify risk when co-deviant</span>
+    CORRELATION_RULES = [
+        (<span class="str">"afterhour_activity"</span>, <span class="str">"usb_count"</span>, 1.5),      <span class="cm"># multiplier</span>
+        (<span class="str">"afterhour_activity"</span>, <span class="str">"file_count"</span>, 1.4),
+        (<span class="str">"usb_count"</span>, <span class="str">"file_count"</span>, 1.3),
+        (<span class="str">"http_count"</span>, <span class="str">"afterhour_activity"</span>, 1.3),
+        (<span class="str">"email_count"</span>, <span class="str">"afterhour_activity"</span>, 1.2),
+    ]
+
+    <span class="kw">def</span> <span class="fn">aggregate</span>(
+        self,
+        results: <span class="tp">List[DetectorResult]</span>,
+        baseline: <span class="tp">Optional[UserBaseline]</span>,
+        features: <span class="tp">Dict[str, float]</span>,
+        user: <span class="tp">str</span>
+    ) -> <span class="tp">RiskVerdict</span>:
+        <span class="cm">"""
+        1. Weighted vote across detector results
+        2. Merge per-feature scores (weighted avg)
+        3. Apply correlation multipliers for co-deviant features
+        4. Produce final RiskVerdict with full explainability data
+        """</span>
+        ...</pre>
+      </div>
+      <p style="margin-top:0.75rem">
+        <strong>Voting logic:</strong>
+        <code>score = Σ(detector_confidence × detector_weight × anomaly_flag) / Σ(weights)</code>.
+        After weighted average, correlation rules scan for co-deviant feature pairs and apply
+        multipliers. Final <code>risk_level</code> thresholds: Low &lt; 25, Medium &lt; 55,
+        High &lt; 80, Critical ≥ 80.
+      </p>
+    </div>
+  </div>
+
+  <!-- 4.6 StoragePlugin -->
+  <div class="plugin-card" onclick="this.classList.toggle('open')">
+    <div class="plugin-card-head">
+      <div class="plugin-card-head-left">
+        <span class="plugin-badge badge-store">STORAGE</span>
+        <span class="plugin-card-title">BaseStorage</span>
+      </div>
+      <span class="toggle-icon">▸</span>
+    </div>
+    <div class="plugin-card-body">
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>server/storage/base.py</span>
+          <span>ABC</span>
+        </div>
+        <pre><span class="kw">class</span> <span class="tp">BaseStorage</span>(ABC):
+    name: <span class="tp">str</span> = <span class="str">"base"</span>
+
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">save_log</span>(self, payload: <span class="tp">dict</span>, verdict: <span class="tp">RiskVerdict</span>) -> <span class="tp">int</span>: ...
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">get_logs</span>(self, limit: <span class="tp">int</span>, filters: <span class="tp">Dict</span>) -> <span class="tp">List[dict]</span>: ...
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">get_user_history</span>(self, user: <span class="tp">str</span>, days: <span class="tp">int</span>) -> <span class="tp">List[dict]</span>: ...
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">save_baseline</span>(self, baseline: <span class="tp">UserBaseline</span>): ...
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">load_baseline</span>(self, user: <span class="tp">str</span>) -> <span class="tp">Optional[UserBaseline]</span>: ...
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">get_agents</span>(self) -> <span class="tp">List[dict]</span>: ...
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">get_anomalies</span>(self, limit: <span class="tp">int</span>, min_risk: <span class="tp">float</span>) -> <span class="tp">List[dict]</span>: ...
+    <span class="dc">@abstractmethod</span>
+    <span class="kw">def</span> <span class="fn">get_stats</span>(self) -> <span class="tp">dict</span>: ...</pre>
+      </div>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ</span>
+        <div>
+          <strong>Phase 2:</strong> <code>SQLiteStorage</code> (default, extended schema with
+          baseline tables). <strong>Phase 3 hook:</strong> <code>PostgresStorage</code> —
+          identical interface, swap via <code>STORAGE_BACKEND=postgres</code> env var. Schema
+          migration handled by <code>storage/migrations/</code> directory.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- 5. PLUGIN REGISTRY & DISCOVERY -->
+<div class="section" id="plugins">
+  <div class="section-id">§5 — Plugin Registry & Discovery</div>
+  <h2>Plugin Loader Mechanism</h2>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span>server/plugin_registry.py</span>
+      <span>DISCOVERY ENGINE</span>
+    </div>
+    <pre><span class="cm"># Simplified plugin discovery — no framework, no magic</span>
+
+<span class="kw">import</span> importlib, pkgutil, inspect
+<span class="kw">from</span> typing <span class="kw">import</span> Type, Dict, List
+
+<span class="kw">class</span> <span class="tp">PluginRegistry</span>:
+    <span class="cm">"""Discovers and manages all plugin instances."""</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        self.crypto_plugins: <span class="tp">List[BaseCryptoPlugin]</span> = []
+        self.feature_extractors: <span class="tp">List[BaseFeatureExtractor]</span> = []
+        self.detectors: <span class="tp">List[BaseDetector]</span> = []
+        self.storage: <span class="tp">Optional[BaseStorage]</span> = <span class="kw">None</span>
+
+    <span class="kw">def</span> <span class="fn">discover</span>(self, package_path: <span class="tp">str</span>, base_class: <span class="tp">Type</span>) -> <span class="tp">List</span>:
+        <span class="cm">"""
+        Scan package_path for modules containing classes that:
+        1. Inherit from base_class
+        2. Are not the base_class itself
+        3. Have enabled = True
+        Returns instantiated plugin list sorted by name.
+        """</span>
+        plugins = []
+        package = importlib.import_module(package_path)
+        <span class="kw">for</span> importer, modname, ispkg <span class="kw">in</span> pkgutil.walk_packages(
+            package.__path__, prefix=package.__name__ + <span class="str">"."</span>
+        ):
+            module = importlib.import_module(modname)
+            <span class="kw">for</span> attr_name <span class="kw">in</span> dir(module):
+                attr = getattr(module, attr_name)
+                <span class="kw">if</span> (inspect.isclass(attr)
+                    <span class="kw">and</span> issubclass(attr, base_class)
+                    <span class="kw">and</span> attr <span class="kw">is not</span> base_class
+                    <span class="kw">and</span> getattr(attr, <span class="str">'enabled'</span>, <span class="kw">False</span>)):
+                    plugins.append(attr())
+        <span class="kw">return</span> sorted(plugins, key=<span class="kw">lambda</span> p: p.name)
+
+    <span class="kw">def</span> <span class="fn">load_all</span>(self, config: <span class="tp">Dict</span>):
+        <span class="cm">"""Master startup: discover all plugin categories."""</span>
+        self.crypto_plugins = self.discover(<span class="str">"server.crypto"</span>, BaseCryptoPlugin)
+        self.feature_extractors = self.discover(<span class="str">"server.features"</span>, BaseFeatureExtractor)
+        self.detectors = self.discover(<span class="str">"server.detectors"</span>, BaseDetector)
+
+        <span class="cm"># Storage is single-active (not multi-plugin)</span>
+        backend = config.get(<span class="str">"STORAGE_BACKEND"</span>, <span class="str">"sqlite"</span>)
+        storage_map = self.discover(<span class="str">"server.storage"</span>, BaseStorage)
+        self.storage = next((s <span class="kw">for</span> s <span class="kw">in</span> storage_map <span class="kw">if</span> s.name == backend), storage_map[0])
+
+        <span class="cm"># Call on_load for detectors that need model files</span>
+        <span class="kw">for</span> d <span class="kw">in</span> self.detectors:
+            d.on_load(config)</pre>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- 6. FEATURE SETS -->
+<div class="section" id="features">
+  <div class="section-id">§6 — Feature Set Specification</div>
+  <h2>Dual-Track Feature Extraction</h2>
+
+  <h3><span class="dot" style="background:var(--accent-cyan)"></span> Track A: CERT 4.2 Behavioral Features (Long-Term)</h3>
+  <table class="spec-table">
+    <thead><tr><th>Feature</th><th>Source</th><th>Type</th><th>Baseline Method</th></tr></thead>
+    <tbody>
+      <tr><td>logon_count</td><td>login_events</td><td>int</td><td>EMA daily count</td></tr>
+      <tr><td>file_count</td><td>file_activity.risk_files_surface</td><td>int</td><td>EMA per-session</td></tr>
+      <tr><td>usb_count</td><td>usb_devices</td><td>int</td><td>EMA (typically 0 for most users)</td></tr>
+      <tr><td>email_count</td><td>email_activity.sent + recv</td><td>int</td><td>EMA daily total</td></tr>
+      <tr><td>http_count</td><td>network_activity.active_connections</td><td>int</td><td>EMA per-session</td></tr>
+      <tr><td>afterhour_activity</td><td>timestamp hour &lt; 8 or &gt; 18</td><td>bool→int</td><td>Frequency ratio</td></tr>
+      <tr><td>afterhour_files</td><td>file_count when afterhour</td><td>int</td><td>EMA (afterhour only)</td></tr>
+      <tr><td>workhour_activity</td><td>inverse of afterhour</td><td>bool→int</td><td>Frequency ratio</td></tr>
+      <tr><td>disk_io_read_mb</td><td>file_activity.disk_io.read_mb</td><td>float</td><td>EMA cumulative</td></tr>
+      <tr><td>disk_io_write_mb</td><td>file_activity.disk_io.write_mb</td><td>float</td><td>EMA cumulative</td></tr>
+      <tr><td>network_bytes_sent</td><td>network_activity.bytes_sent</td><td>int</td><td>EMA per-session</td></tr>
+      <tr><td>network_bytes_recv</td><td>network_activity.bytes_recv</td><td>int</td><td>EMA per-session</td></tr>
+    </tbody>
+  </table>
+
+  <h3><span class="dot" style="background:var(--accent-green)"></span> Track B: LANL EDR Features (Short-Term)</h3>
+  <table class="spec-table">
+    <thead><tr><th>Feature</th><th>Derivation</th><th>Type</th><th>Baseline Method</th></tr></thead>
+    <tbody>
+      <tr><td>auth_event_count</td><td>login_events length per window</td><td>int</td><td>EMA per-hour</td></tr>
+      <tr><td>auth_success_ratio</td><td>successful / total logons</td><td>float</td><td>EMA ratio</td></tr>
+      <tr><td>dest_diversity</td><td>unique(host) in login_events</td><td>int</td><td>EMA unique count</td></tr>
+      <tr><td>offhour_flag</td><td>hour &lt; 6 or hour &gt; 22</td><td>bool→int</td><td>Frequency ratio</td></tr>
+      <tr><td>weekend_flag</td><td>day_of_week in (5, 6)</td><td>bool→int</td><td>Frequency ratio</td></tr>
+      <tr><td>auth_burst_score</td><td>events_in_5min / avg_events_5min</td><td>float</td><td>EMA ratio</td></tr>
+      <tr><td>logon_type_variety</td><td>unique logon types in window</td><td>int</td><td>EMA</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="divider">
+
+<!-- 7. FILE TREE -->
+<div class="section" id="tree">
+  <div class="section-id">§7 — Project File Tree</div>
+  <h2>Complete Directory Structure</h2>
+
+  <div class="file-tree">
+<span class="dir">insiedr/</span>
+├── <span class="dir">agent/</span>                              <span class="comment"># Endpoint agent (deploys to 12 hosts)</span>
+│   ├── agent.py                           <span class="comment"># Main agent loop (evolved from Phase 1)</span>
+│   ├── config.py                          <span class="comment"># Agent config (env vars, defaults)</span>
+│   ├── payload_builder.py                 <span class="comment"># Structured payload assembly</span>
+│   ├── transport.py                       <span class="comment"># Retry, queue, send logic</span>
+│   ├── <span class="dir">crypto/</span>
+│   │   ├── __init__.py
+│   │   ├── aesgcm.py                      <span class="comment"># AES-256-GCM encrypt (Phase 2 primary)</span>
+│   │   └── fernet_compat.py               <span class="comment"># Fernet fallback (Phase 1 compat)</span>
+│   ├── <span class="dir">collectors/</span>                     <span class="comment"># Feature collector plugins</span>
+│   │   ├── __init__.py
+│   │   ├── base.py                        <span class="iface"># BaseCollector ABC</span>
+│   │   ├── file_scanner.py                <span class="comment"># Suspicious file detection</span>
+│   │   ├── browser_history.py             <span class="comment"># Chrome/Edge/Firefox/Brave</span>
+│   │   ├── usb_monitor.py                 <span class="comment"># Removable media detection</span>
+│   │   ├── session_monitor.py             <span class="comment"># Login events, idle time</span>
+│   │   ├── network_monitor.py             <span class="comment"># Connection tracking, bytes I/O</span>
+│   │   ├── email_monitor.py               <span class="comment"># Outlook sent/recv counts</span>
+│   │   ├── process_watcher.py             <span class="comment"># Process execution logging (new P2)</span>
+│   │   └── screenshot.py                  <span class="comment"># Optional screenshot capture</span>
+│   ├── <span class="dir">queue/</span>
+│   │   ├── __init__.py
+│   │   └── sqlite_queue.py                <span class="comment"># Persistent offline queue</span>
+│   └── requirements_agent.txt
+│
+├── <span class="dir">server/</span>                             <span class="comment"># Central analysis server</span>
+│   ├── app.py                             <span class="comment"># Flask + SocketIO orchestrator (thin)</span>
+│   ├── config.py                          <span class="comment"># Server config (env vars, plugin toggles)</span>
+│   ├── <span class="dir">plugin_registry.py</span>             <span class="iface"># Plugin discovery & lifecycle</span>
+│   │
+│   ├── <span class="dir">crypto/</span>                         <span class="comment"># Crypto plugin category</span>
+│   │   ├── __init__.py
+│   │   ├── <span class="iface">base.py</span>                    <span class="comment"># BaseCryptoPlugin ABC</span>
+│   │   ├── aesgcm_plugin.py               <span class="comment"># AES-256-GCM decrypt + verify</span>
+│   │   ├── fernet_plugin.py               <span class="comment"># Fernet decrypt (Phase 1 compat)</span>
+│   │   └── plaintext_plugin.py            <span class="comment"># Pass-through (testing only)</span>
+│   │
+│   ├── <span class="dir">features/</span>                       <span class="comment"># Feature extractor plugins</span>
+│   │   ├── __init__.py
+│   │   ├── <span class="iface">base.py</span>                    <span class="comment"># BaseFeatureExtractor ABC</span>
+│   │   ├── cert_behavioral.py             <span class="comment"># CERT 4.2 long-term features (12 feats)</span>
+│   │   └── lanl_edr.py                    <span class="comment"># LANL short-term EDR features (7 feats)</span>
+│   │
+│   ├── <span class="dir">baseline/</span>                       <span class="comment"># Baseline engine (core, not plugin)</span>
+│   │   ├── __init__.py
+│   │   └── engine.py                      <span class="comment"># Per-user EMA baseline + z-score calc</span>
+│   │
+│   ├── <span class="dir">detectors/</span>                      <span class="comment"># Detector plugins</span>
+│   │   ├── __init__.py
+│   │   ├── <span class="iface">base.py</span>                    <span class="comment"># BaseDetector ABC + DetectorResult</span>
+│   │   ├── zscore_detector.py             <span class="comment"># Statistical z-score deviation</span>
+│   │   ├── random_forest_detector.py      <span class="comment"># Migrated Phase 1 RF model</span>
+│   │   ├── isolation_forest_detector.py   <span class="comment"># Unsupervised anomaly scoring</span>
+│   │   ├── auth_burst_detector.py         <span class="comment"># LANL auth frequency analysis</span>
+│   │   └── lstm_forecaster.py             <span class="comment"># Phase 3 stub (enabled=False)</span>
+│   │
+│   ├── <span class="dir">risk/</span>                           <span class="comment"># Risk aggregation (core, not plugin)</span>
+│   │   ├── __init__.py
+│   │   └── aggregator.py                  <span class="comment"># Ensemble voting + correlation rules</span>
+│   │
+│   ├── <span class="dir">storage/</span>                        <span class="comment"># Storage plugin category</span>
+│   │   ├── __init__.py
+│   │   ├── <span class="iface">base.py</span>                    <span class="comment"># BaseStorage ABC</span>
+│   │   ├── sqlite_storage.py              <span class="comment"># Phase 2 default (extended schema)</span>
+│   │   ├── postgres_storage.py            <span class="comment"># Phase 3 stub (enabled=False)</span>
+│   │   └── <span class="dir">migrations/</span>
+│   │       ├── 001_phase2_schema.sql      <span class="comment"># Baseline tables, extended logs</span>
+│   │       └── 002_phase3_federation.sql  <span class="comment"># Phase 3 stub</span>
+│   │
+│   ├── <span class="dir">api/</span>                            <span class="comment"># API route blueprints</span>
+│   │   ├── __init__.py
+│   │   ├── ingest.py                      <span class="comment"># POST /api/logs (ingestion)</span>
+│   │   ├── agents.py                      <span class="comment"># GET /api/agents</span>
+│   │   ├── logs.py                        <span class="comment"># GET /api/logs</span>
+│   │   ├── anomalies.py                   <span class="comment"># GET /api/anomalies</span>
+│   │   ├── baseline.py                    <span class="comment"># GET /api/baseline/&lt;user&gt;</span>
+│   │   ├── stats.py                       <span class="comment"># GET /api/stats</span>
+│   │   └── health.py                      <span class="comment"># GET /api/health (monitoring)</span>
+│   │
+│   ├── <span class="dir">dashboard/</span>
+│   │   └── <span class="dir">templates/</span>
+│   │       └── dashboard.html             <span class="comment"># Explainable SOC dashboard</span>
+│   │
+│   ├── <span class="dir">models/</span>                         <span class="comment"># Trained model files</span>
+│   │   ├── model_available_features.pkl
+│   │   ├── scaler_available.pkl
+│   │   └── feature_names_available.pkl
+│   │
+│   └── requirements_server.txt
+│
+├── <span class="dir">shared/</span>                             <span class="comment"># Shared between agent & server</span>
+│   ├── __init__.py
+│   ├── protocol.py                        <span class="comment"># Wire format, header constants</span>
+│   └── crypto_utils.py                    <span class="comment"># Key derivation, HMAC helpers</span>
+│
+├── <span class="dir">tests/</span>
+│   ├── test_crypto_plugins.py
+│   ├── test_feature_extractors.py
+│   ├── test_detectors.py
+│   ├── test_baseline_engine.py
+│   ├── test_risk_aggregator.py
+│   ├── test_storage.py
+│   └── test_integration.py
+│
+├── <span class="dir">scripts/</span>
+│   ├── generate_keys.py                   <span class="comment"># Generate AES-GCM + HMAC keys</span>
+│   ├── migrate_db.py                      <span class="comment"># Run schema migrations</span>
+│   └── simulate_agent.py                  <span class="comment"># Test agent payload generator</span>
+│
+├── .env.example
+├── docker-compose.yml                     <span class="comment"># Server + optional Postgres (Phase 3)</span>
+├── Dockerfile.server
+├── Dockerfile.agent
+└── README.md</div>
+</div>
+
+<hr class="divider">
+
+<!-- 8. DATABASE SCHEMA -->
+<div class="section">
+  <div class="section-id">§8 — Storage Schema Evolution</div>
+  <h2>Phase 2 Database Schema</h2>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span>server/storage/migrations/001_phase2_schema.sql</span>
+      <span>SQLite</span>
+    </div>
+    <pre><span class="cm">-- Extended logs table (evolved from Phase 1)</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span> logs (
+    id              <span class="tp">INTEGER PRIMARY KEY AUTOINCREMENT</span>,
+    server_received <span class="tp">TEXT NOT NULL</span>,
+    timestamp       <span class="tp">TEXT NOT NULL</span>,
+    agent_id        <span class="tp">TEXT NOT NULL</span>,
+    hostname        <span class="tp">TEXT</span>,
+    user            <span class="tp">TEXT NOT NULL</span>,
+    os              <span class="tp">TEXT</span>,
+    session_status  <span class="tp">TEXT</span>,
+    idle_seconds    <span class="tp">INTEGER DEFAULT</span> 0,
+    <span class="cm">-- Raw telemetry (JSON blobs for forensic integrity)</span>
+    raw_payload     <span class="tp">TEXT</span>,                <span class="cm">-- Full original JSON</span>
+    <span class="cm">-- Extracted features (flat for query performance)</span>
+    feat_logon_count        <span class="tp">REAL DEFAULT</span> 0,
+    feat_file_count         <span class="tp">REAL DEFAULT</span> 0,
+    feat_usb_count          <span class="tp">REAL DEFAULT</span> 0,
+    feat_email_count        <span class="tp">REAL DEFAULT</span> 0,
+    feat_http_count         <span class="tp">REAL DEFAULT</span> 0,
+    feat_afterhour          <span class="tp">REAL DEFAULT</span> 0,
+    feat_afterhour_files    <span class="tp">REAL DEFAULT</span> 0,
+    feat_workhour           <span class="tp">REAL DEFAULT</span> 0,
+    feat_disk_read_mb       <span class="tp">REAL DEFAULT</span> 0,
+    feat_disk_write_mb      <span class="tp">REAL DEFAULT</span> 0,
+    feat_net_sent           <span class="tp">REAL DEFAULT</span> 0,
+    feat_net_recv           <span class="tp">REAL DEFAULT</span> 0,
+    <span class="cm">-- ML / Risk verdict</span>
+    is_anomaly      <span class="tp">INTEGER DEFAULT</span> 0,
+    risk_score      <span class="tp">REAL DEFAULT</span> 0.0,
+    risk_level      <span class="tp">TEXT DEFAULT</span> <span class="str">'Low'</span>,
+    agreement_ratio <span class="tp">REAL DEFAULT</span> 0.0,
+    detectors_json  <span class="tp">TEXT</span>,               <span class="cm">-- JSON: full DetectorResult list</span>
+    verdict_json    <span class="tp">TEXT</span>,               <span class="cm">-- JSON: full RiskVerdict</span>
+    <span class="cm">-- Indexes</span>
+    <span class="kw">UNIQUE</span>(agent_id, timestamp)
+);
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> idx_logs_user <span class="kw">ON</span> logs(user);
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> idx_logs_risk <span class="kw">ON</span> logs(risk_score <span class="kw">DESC</span>);
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> idx_logs_ts <span class="kw">ON</span> logs(timestamp <span class="kw">DESC</span>);
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> idx_logs_anomaly <span class="kw">ON</span> logs(is_anomaly, risk_level);
+
+<span class="cm">-- Per-user behavioral baselines</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span> baselines (
+    user            <span class="tp">TEXT PRIMARY KEY</span>,
+    feature_means   <span class="tp">TEXT NOT NULL</span>,     <span class="cm">-- JSON: {feature: ema_mean}</span>
+    feature_stds    <span class="tp">TEXT NOT NULL</span>,     <span class="cm">-- JSON: {feature: ema_std}</span>
+    feature_counts  <span class="tp">TEXT NOT NULL</span>,     <span class="cm">-- JSON: {feature: sample_count}</span>
+    hour_profiles   <span class="tp">TEXT</span>,             <span class="cm">-- JSON: {0-23: {feature: mean}}</span>
+    sample_count    <span class="tp">INTEGER DEFAULT</span> 0,
+    decay_factor    <span class="tp">REAL DEFAULT</span> 0.05,
+    last_updated    <span class="tp">TEXT NOT NULL</span>,
+    created_at      <span class="tp">TEXT NOT NULL</span>
+);
+
+<span class="cm">-- Alert history (for SOC investigation)</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span> alerts (
+    id              <span class="tp">INTEGER PRIMARY KEY AUTOINCREMENT</span>,
+    log_id          <span class="tp">INTEGER REFERENCES</span> logs(id),
+    user            <span class="tp">TEXT NOT NULL</span>,
+    risk_level      <span class="tp">TEXT NOT NULL</span>,
+    risk_score      <span class="tp">REAL NOT NULL</span>,
+    top_features    <span class="tp">TEXT</span>,             <span class="cm">-- JSON: top deviating features</span>
+    correlated      <span class="tp">TEXT</span>,             <span class="cm">-- JSON: correlation signals fired</span>
+    acknowledged    <span class="tp">INTEGER DEFAULT</span> 0,
+    ack_by          <span class="tp">TEXT</span>,
+    ack_at          <span class="tp">TEXT</span>,
+    created_at      <span class="tp">TEXT NOT NULL</span>
+);
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> idx_alerts_user <span class="kw">ON</span> alerts(user);
+<span class="kw">CREATE INDEX IF NOT EXISTS</span> idx_alerts_level <span class="kw">ON</span> alerts(risk_level);</pre>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- 9. PHASE 3 HOOKS -->
+<div class="section" id="phase3">
+  <div class="section-id">§9 — Phase 3 Forward Compatibility</div>
+  <h2>Phase 3 Extension Points</h2>
+  <p>
+    The following hooks are built into Phase 2's plugin interfaces but remain dormant
+    (<code>enabled = False</code>) until Phase 3 activation. No Phase 2 code needs modification.
+  </p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(239,68,68,0.1);color:var(--accent-red)">L</div>
+        <div>
+          <div class="card-title">LSTM Next-Day Forecaster</div>
+          <div class="card-subtitle"><span class="phase-ind phase-3">PHASE 3</span></div>
+        </div>
+      </div>
+      <div class="card-body">
+        <code>lstm_forecaster.py</code> stub exists in <code>detectors/</code> with
+        <code>enabled=False</code>. Implements <code>BaseDetector</code> — requires 7-day rolling
+        window from <code>BaselineEngine.get_rolling_window()</code>. Uses PyTorch LSTM trained
+        on per-user feature sequences. Predicts next-day expected behavior vector; deviation
+        from prediction → anomaly. Weight set to 1.5 (highest among ensemble).
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(239,68,68,0.1);color:var(--accent-red)">P</div>
+        <div>
+          <div class="card-title">PostgreSQL Storage Backend</div>
+          <div class="card-subtitle"><span class="phase-ind phase-3">PHASE 3</span></div>
+        </div>
+      </div>
+      <div class="card-body">
+        <code>postgres_storage.py</code> implements <code>BaseStorage</code> with identical
+        interface. Activated by <code>STORAGE_BACKEND=postgres</code>. Migration
+        <code>002_phase3_federation.sql</code> adds partition-by-month on logs table,
+        materialized views for per-user weekly aggregates, and federation sync tables.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(239,68,68,0.1);color:var(--accent-red)">F</div>
+        <div>
+          <div class="card-title">Federation API</div>
+          <div class="card-subtitle"><span class="phase-ind phase-3">PHASE 3</span></div>
+        </div>
+      </div>
+      <div class="card-body">
+        The <code>RiskAggregator</code> exposes a <code>get_federation_digest()</code> method
+        (returns anonymized risk metrics per agent). Phase 3 adds
+        <code>api/federation.py</code> blueprint with mutual-TLS endpoints for cross-org
+        threat intelligence sharing. Uses the same <code>BaseStorage</code> interface — no
+        core refactoring required.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(239,68,68,0.1);color:var(--accent-red)">A</div>
+        <div>
+          <div class="card-title">Autoencoder Detector</div>
+          <div class="card-subtitle"><span class="phase-ind phase-3">PHASE 3</span></div>
+        </div>
+      </div>
+      <div class="card-body">
+        Deep autoencoder trained per-user to learn compressed behavioral representation.
+        Reconstruction error above threshold signals anomaly. Implements
+        <code>BaseDetector</code> — slot exists in <code>detectors/</code>. Requires
+        sufficient per-user history (>200 data points) before activation. Benefits from
+        PostgreSQL materialized views for training data access.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(239,68,68,0.1);color:var(--accent-red)">R</div>
+        <div>
+          <div class="card-title">Remote Plugin Delivery</div>
+          <div class="card-subtitle"><span class="phase-ind phase-3">PHASE 3</span></div>
+        </div>
+      </div>
+      <div class="card-body">
+        Agent's plugin loader supports a <code>PLUGIN_REMOTE_URL</code> config that fetches
+        signed plugin bundles from the server. Enables centralized deployment of new
+        collector plugins to all 12 endpoints without manual file distribution. Plugin
+        bundles are signed with the server's HMAC key for integrity verification.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(239,68,68,0.1);color:var(--accent-red)">D</div>
+        <div>
+          <div class="card-title">DLP Integration Extractor</div>
+          <div class="card-subtitle"><span class="phase-ind phase-3">PHASE 3</span></div>
+        </div>
+      </div>
+      <div class="card-body">
+        Third feature extractor plugin implementing <code>BaseFeatureExtractor</code>.
+        Consumes Data Loss Prevention event feeds (file classification labels, sensitivity
+        scores, exfiltration attempt flags). Feeds into existing detectors without
+        modification — detectors that declare <code>required_extractors=["dlp"]</code>
+        activate automatically when the plugin is present.
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- 10. SETUP COMMANDS -->
+<div class="section">
+  <div class="section-id">§10 — Setup & Deployment</div>
+  <h2>CLI Commands</h2>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span>Server Setup</span>
+      <span>bash</span>
+    </div>
+    <pre><span class="cm"># 1. Clone and enter project</span>
+git clone &lt;repo&gt; insiedr && cd insiedr
+
+<span class="cm"># 2. Create virtual environment</span>
+python -m venv .venv && source .venv/bin/activate   <span class="cm"># Linux/Mac</span>
+python -m venv .venv && .venv\Scripts\activate       <span class="cm"># Windows</span>
+
+<span class="cm"># 3. Install server dependencies</span>
+pip install -r server/requirements_server.txt
+
+<span class="cm"># 4. Generate encryption keys</span>
+python scripts/generate_keys.py
+
+<span class="cm"># 5. Configure environment</span>
+cp .env.example .env
+<span class="cm"># Edit .env: set AGENT_SECRET, AES_KEY_PATH, STORAGE_BACKEND</span>
+
+<span class="cm"># 6. Run database migrations</span>
+python scripts/migrate_db.py
+
+<span class="cm"># 7. Start server</span>
+python -m server.app</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span>Agent Deployment (per endpoint)</span>
+      <span>bash</span>
+    </div>
+    <pre><span class="cm"># 1. Copy agent directory to endpoint</span>
+scp -r agent/ user@endpoint:/opt/insiedr/
+
+<span class="cm"># 2. Install agent dependencies</span>
+pip install -r /opt/insiedr/agent/requirements_agent.txt
+
+<span class="cm"># 3. Configure agent</span>
+set AGENT_SERVER=https://&lt;server-ip&gt;:5000/api/logs
+set AGENT_SECRET=&lt;matching-hmac-secret&gt;
+set AES_KEY_PATH=/opt/insiedr/agent/keys/aes.key
+
+<span class="cm"># 4. Run agent (or install as Windows service)</span>
+python /opt/insiedr/agent/agent.py</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span>Docker (Server)</span>
+      <span>bash</span>
+    </div>
+    <pre><span class="cm"># Build and run with docker-compose</span>
+docker-compose up -d server
+
+<span class="cm"># Phase 3: Add Postgres</span>
+docker-compose --profile phase3 up -d</pre>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- 11. DEPENDENCY MATRIX -->
+<div class="section">
+  <div class="section-id">§11 — Dependencies</div>
+  <h2>Verified Package Matrix</h2>
+
+  <table class="spec-table">
+    <thead><tr><th>Package</th><th>Version</th><th>Component</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>flask</td><td>≥3.0</td><td>Server</td><td>HTTP framework</td></tr>
+      <tr><td>flask-socketio</td><td>≥5.3</td><td>Server</td><td>Real-time WebSocket</td></tr>
+      <tr><td>cryptography</td><td>≥42.0</td><td>Both</td><td>AES-GCM, Fernet, key derivation</td></tr>
+      <tr><td>scikit-learn</td><td>≥1.4</td><td>Server</td><td>RandomForest, IsolationForest</td></tr>
+      <tr><td>numpy</td><td>≥1.26</td><td>Server</td><td>Feature arrays, math ops</td></tr>
+      <tr><td>joblib</td><td>≥1.3</td><td>Server</td><td>Model serialization</td></tr>
+      <tr><td>psutil</td><td>≥5.9</td><td>Agent</td><td>System telemetry collection</td></tr>
+      <tr><td>requests</td><td>≥2.31</td><td>Agent</td><td>HTTP transport with retry</td></tr>
+      <tr><td>pytz</td><td>≥2024.1</td><td>Agent</td><td>Timezone handling</td></tr>
+      <tr><td>pywin32</td><td>≥306</td><td>Agent (Win)</td><td>Active window, Outlook COM</td></tr>
+      <tr><td>Pillow</td><td>≥10.0</td><td>Agent (opt)</td><td>Screenshot capture</td></tr>
+      <tr style="opacity:0.5"><td>torch</td><td>≥2.2</td><td>Server (P3)</td><td>LSTM forecaster</td></tr>
+      <tr style="opacity:0.5"><td>psycopg2-binary</td><td>≥2.9</td><td>Server (P3)</td><td>PostgreSQL driver</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="divider">
+
+<!-- 12. CONFIDENCE -->
+<div class="section">
+  <div class="section-id">§12 — Evaluation</div>
+  <h2>Architecture Confidence Assessment</h2>
+
+  <div class="confidence-bar">
+    <div class="confidence-bar-label">Overall Confidence Score</div>
+    <div class="confidence-bar-track">
+      <div class="confidence-bar-fill" style="width: 91%"></div>
+    </div>
+    <div class="confidence-bar-value">91<span>%</span></div>
+  </div>
+
+  <table class="spec-table">
+    <thead><tr><th>Dimension</th><th>Score</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Architectural Soundness</td>
+        <td>95%</td>
+        <td>ABC + registry discovery is proven in production Python systems. No over-engineering — each plugin category maps to a real separation of concerns in the threat detection pipeline.</td>
+      </tr>
+      <tr>
+        <td>Phase 1 Compatibility</td>
+        <td>94%</td>
+        <td>Every Phase 1 function maps to a plugin or core module. Agent payload format preserved. Server API routes preserved. Fernet backward-compat plugin ensures zero-downtime migration.</td>
+      </tr>
+      <tr>
+        <td>Phase 3 Readiness</td>
+        <td>88%</td>
+        <td>LSTM, Postgres, Federation, Autoencoder, DLP all have clean extension points. Risk: LSTM training pipeline and federation mutual-TLS may require minor interface additions.</td>
+      </tr>
+      <tr>
+        <td>Security</td>
+        <td>92%</td>
+        <td>AES-256-GCM authenticated encryption, HMAC integrity, owner-only file perms, TLS verification. Gap: Key rotation protocol not fully specified (recommend quarterly rotation SOP).</td>
+      </tr>
+      <tr>
+        <td>Detection Accuracy</td>
+        <td>87%</td>
+        <td>Ensemble 2-of-N voting with correlation multipliers will significantly reduce false positives vs Phase 1 single-model approach. Gap: Correlation rules need empirical tuning on real data.</td>
+      </tr>
+      <tr>
+        <td>Operational Readiness</td>
+        <td>90%</td>
+        <td>Docker deployment, schema migrations, health endpoint, hot-reload via SIGHUP. Full test suite structure. Gap: Monitoring/alerting integration (Prometheus/Grafana) deferred to Phase 3.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</main>
+
+<script>
+  // Smooth scroll for nav links
+  document.querySelectorAll('.nav-links a').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+
+</body>
+</html>
