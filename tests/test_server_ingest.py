@@ -30,6 +30,7 @@ class RecordingStorage:
 def test_post_logs_decrypts_persists_and_accepts(monkeypatch):
     monkeypatch.setenv("INSIEDR_AES_KEY", "11" * 32)
     monkeypatch.setenv("INSIEDR_REPLAY_WINDOW_HOURS", "24")
+    monkeypatch.setenv("INSIEDR_ENABLE_MODEL_PIPELINE", "false")
     registry._plugins.clear()
 
     storage = RecordingStorage(calls=[])
@@ -115,6 +116,7 @@ def _encrypted_request(payload_id="payload-extra", agent_id="agent-extra"):
 def _client(monkeypatch, storage):
     monkeypatch.setenv("INSIEDR_AES_KEY", "11" * 32)
     monkeypatch.setenv("INSIEDR_REPLAY_WINDOW_HOURS", "24")
+    monkeypatch.setenv("INSIEDR_ENABLE_MODEL_PIPELINE", "false")
     monkeypatch.delenv("INSIEDR_ENABLE_PLAINTEXT_CRYPTO", raising=False)
     registry._plugins.clear()
     return create_app(storage=storage).test_client()
@@ -197,6 +199,7 @@ def test_plaintext_crypto_disabled_by_default(monkeypatch):
 def test_post_logs_decrypts_and_persists_into_sqlite_storage(monkeypatch):
     monkeypatch.setenv("INSIEDR_AES_KEY", "11" * 32)
     monkeypatch.setenv("INSIEDR_REPLAY_WINDOW_HOURS", "24")
+    monkeypatch.setenv("INSIEDR_ENABLE_MODEL_PIPELINE", "false")
     registry._plugins.clear()
 
     conn = sqlite3.connect(":memory:")
@@ -262,6 +265,20 @@ def test_post_logs_decrypts_and_persists_into_sqlite_storage(monkeypatch):
             quality_notes TEXT,
             created_at TEXT
         );
+        CREATE TABLE model_outputs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            payload_id TEXT,
+            agent_id TEXT,
+            username TEXT,
+            detector_name TEXT,
+            model_version TEXT,
+            score REAL,
+            confidence REAL,
+            is_anomaly INTEGER,
+            feature_contributions_json TEXT,
+            reason_summary TEXT,
+            created_at TEXT
+        );
         """
     )
 
@@ -320,3 +337,7 @@ def test_post_logs_decrypts_and_persists_into_sqlite_storage(monkeypatch):
 
     assert raw_row == ("payload-456", "agent-456", "accepted")
     assert collector_rows == [("logon", "success", "high"), ("http-feature", "failed", "low")]
+    model_row = conn.execute("SELECT detector_name, confidence, reason_summary FROM model_outputs").fetchone()
+    assert model_row[0] == "model_bridge"
+    assert model_row[1] == 0.0
+    assert "disabled" in model_row[2]

@@ -478,6 +478,184 @@ class PostgresStorage(BaseStorage):
             finally:
                 cursor.close()
 
+    def get_feature_vector(self, payload_id: str) -> dict[str, Any]:
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                cursor.execute(
+                    f"""
+                    SELECT feature_name, feature_value_numeric, feature_value_text, feature_value_json
+                    FROM normalized_features
+                    WHERE payload_id = {placeholder}
+                    """,
+                    (payload_id,),
+                )
+                features: dict[str, Any] = {}
+                for name, numeric, text, json_value in cursor.fetchall():
+                    if numeric is not None:
+                        features[name] = numeric
+                    elif text is not None:
+                        features[name] = text
+                    elif json_value is not None:
+                        try:
+                            features[name] = json.loads(json_value) if isinstance(json_value, str) else json_value
+                        except json.JSONDecodeError:
+                            features[name] = json_value
+                    else:
+                        features[name] = None
+                return features
+            except Exception:
+                return {}
+            finally:
+                cursor.close()
+
+    def list_daily_feature_vectors(self, username: str | None, hostname: str | None, limit: int = 16) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                where = []
+                params: list[Any] = []
+                if username:
+                    where.append(f"username = {placeholder}")
+                    params.append(username)
+                if hostname:
+                    where.append(f"hostname = {placeholder}")
+                    params.append(hostname)
+                if not where:
+                    return []
+                where_sql = " AND ".join(where)
+                cursor.execute(
+                    f"""
+                    SELECT feature_timestamp, feature_name, feature_value_numeric, feature_value_text, feature_value_json
+                    FROM normalized_features
+                    WHERE {where_sql}
+                    ORDER BY feature_timestamp DESC, id DESC
+                    LIMIT {placeholder}
+                    """,
+                    tuple(params + [limit * 128]),
+                )
+                grouped: dict[str, dict[str, Any]] = {}
+                for timestamp, name, numeric, text, json_value in cursor.fetchall():
+                    day = str(timestamp or "")[:10]
+                    if not day:
+                        continue
+                    grouped.setdefault(day, {})
+                    if numeric is not None:
+                        grouped[day][name] = numeric
+                    elif text is not None:
+                        grouped[day][name] = text
+                    elif json_value is not None:
+                        try:
+                            grouped[day][name] = json.loads(json_value) if isinstance(json_value, str) else json_value
+                        except json.JSONDecodeError:
+                            grouped[day][name] = json_value
+                    else:
+                        grouped[day][name] = None
+                days = sorted(grouped.keys())[-limit:]
+                return [{"date": day, "features": grouped[day]} for day in days]
+            except Exception:
+                return []
+            finally:
+                cursor.close()
+
+    def save_model_output(self, output: dict[str, Any]) -> None:
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                cursor.execute(
+                    f"""
+                    INSERT INTO model_outputs (
+                        payload_id, agent_id, username, detector_name, model_version, score,
+                        confidence, is_anomaly, feature_contributions_json, reason_summary, created_at
+                    ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
+                              {placeholder}, {placeholder}, {placeholder}, {placeholder}, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        output.get("payload_id"),
+                        output.get("agent_id"),
+                        output.get("username"),
+                        output.get("detector_name"),
+                        output.get("model_version"),
+                        output.get("score"),
+                        output.get("confidence"),
+                        int(bool(output.get("is_anomaly"))),
+                        self._stable_json(output.get("feature_contributions_json") or {}),
+                        output.get("reason_summary"),
+                    ),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+
+    def save_risk_event(self, event: dict[str, Any]) -> None:
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                cursor.execute(
+                    f"""
+                    INSERT INTO risk_events (
+                        payload_id, agent_id, username, risk_score, risk_level,
+                        correlated_signals_json, summary, created_at
+                    ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
+                              {placeholder}, {placeholder}, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        event.get("payload_id"),
+                        event.get("agent_id"),
+                        event.get("username"),
+                        event.get("risk_score"),
+                        event.get("risk_level"),
+                        self._stable_json(event.get("correlated_signals_json") or {}),
+                        event.get("summary"),
+                    ),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+
+    def list_recent_risk_scores(self, username: str | None, hostname: str | None, limit: int = 7) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                where = []
+                params: list[Any] = []
+                if username:
+                    where.append(f"username = {placeholder}")
+                    params.append(username)
+                if hostname:
+                    where.append(
+                        f"payload_id IN (SELECT payload_id FROM raw_payloads WHERE hostname = {placeholder})"
+                    )
+                    params.append(hostname)
+                if not where:
+                    return []
+                cursor.execute(
+                    f"""
+                    SELECT payload_id, username, risk_score, risk_level, created_at
+                    FROM risk_events
+                    WHERE {" AND ".join(where)}
+                    ORDER BY created_at DESC
+                    LIMIT {placeholder}
+                    """,
+                    tuple(params + [limit]),
+                )
+                return self._rows_to_dicts(cursor)
+            except Exception:
+                return []
+            finally:
+                cursor.close()
+
     def save_baseline(self, baseline: dict[str, Any]) -> None:
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -540,8 +718,170 @@ class PostgresStorage(BaseStorage):
                     "mean_value": row[6],
                     "std_value": row[7],
                     "sample_count": row[8],
-                    "metadata_json": json.loads(row[9]) if isinstance(row[9], str) else row[9],
                     "created_at": row[10],
                 }
+            finally:
+                cursor.close()
+
+    def get_pc_status(self, hours_since_online: int = 24) -> dict[str, Any]:
+        """Returns unique PC count, online count, offline count based on last_seen_at"""
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                # Get total unique PCs
+                cursor.execute("SELECT COUNT(DISTINCT hostname) FROM agents WHERE hostname IS NOT NULL")
+                total_pcs = cursor.fetchone()[0] or 0
+                
+                # Get online PCs (seen in last N hours)
+                # Use database-agnostic approach for both PostgreSQL and SQLite
+                module_name = conn.__class__.__module__
+                if module_name.startswith("sqlite3"):
+                    # SQLite: use datetime functions
+                    cursor.execute(
+                        f"""
+                        SELECT COUNT(DISTINCT hostname) FROM agents 
+                        WHERE hostname IS NOT NULL 
+                        AND last_seen_at > datetime('now', '-{hours_since_online} hours')
+                        """
+                    )
+                else:
+                    # PostgreSQL: use INTERVAL
+                    cursor.execute(
+                        f"""
+                        SELECT COUNT(DISTINCT hostname) FROM agents 
+                        WHERE hostname IS NOT NULL 
+                        AND last_seen_at > CURRENT_TIMESTAMP - INTERVAL '{placeholder} hours'
+                        """,
+                        (hours_since_online,)
+                    )
+                online_pcs = cursor.fetchone()[0] or 0
+                offline_pcs = max(0, total_pcs - online_pcs)
+                
+                return {
+                    "total_pcs": total_pcs,
+                    "online_pcs": online_pcs,
+                    "offline_pcs": offline_pcs
+                }
+            except Exception as e:
+                # Return defaults on error
+                return {"total_pcs": 0, "online_pcs": 0, "offline_pcs": 0}
+            finally:
+                cursor.close()
+
+    def get_user_collectors(self, username: str) -> list[dict[str, Any]]:
+        """Returns collector results for a specific user with latest data"""
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                cursor.execute(
+                    f"""
+                    SELECT DISTINCT cr.collector, cr.payload_id, cr.collector_collected_at, 
+                           cr.status, cr.payload_json, rp.received_at
+                    FROM collector_results cr
+                    JOIN raw_payloads rp ON cr.payload_id = rp.payload_id
+                    WHERE rp.username = {placeholder}
+                    ORDER BY cr.collector, rp.received_at DESC
+                    """,
+                    (username,)
+                )
+                results = []
+                seen_collectors = set()
+                for row in cursor.fetchall():
+                    collector_name = row[0]
+                    if collector_name not in seen_collectors:
+                        seen_collectors.add(collector_name)
+                        payload_json = row[4]
+                        try:
+                            payload = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
+                        except:
+                            payload = {}
+                        
+                        results.append({
+                            "collector": collector_name,
+                            "payload_id": row[1],
+                            "collected_at": row[2],
+                            "status": row[3],
+                            "payload": payload,
+                            "received_at": row[5]
+                        })
+                return results
+            finally:
+                cursor.close()
+
+    def get_user_risk_scores(self, username: str, limit: int = 30) -> list[dict[str, Any]]:
+        """Returns historical risk scores for a user ordered by date"""
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                cursor.execute(
+                    f"""
+                    SELECT re.risk_score, re.risk_level, re.created_at, re.summary
+                    FROM risk_events re
+                    WHERE re.username = {placeholder}
+                    ORDER BY re.created_at DESC
+                    LIMIT {placeholder}
+                    """,
+                    (username, limit)
+                )
+                results = []
+                for row in cursor.fetchall():
+                    results.append({
+                        "risk_score": row[0],
+                        "risk_level": row[1],
+                        "created_at": row[2],
+                        "summary": row[3]
+                    })
+                return sorted(results, key=lambda x: x["created_at"])
+            except Exception:
+                return []
+            finally:
+                cursor.close()
+
+    def get_user_predictions(self, username: str) -> dict[str, Any] | None:
+        """Returns latest model predictions for a user"""
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            try:
+                placeholder = self._placeholder(conn)
+                cursor.execute(
+                    f"""
+                    SELECT mo.detector_name, mo.score, mo.confidence, mo.is_anomaly, 
+                           mo.feature_contributions_json, mo.reason_summary, mo.created_at
+                    FROM model_outputs mo
+                    WHERE mo.username = {placeholder}
+                    ORDER BY mo.created_at DESC
+                    LIMIT 2
+                    """,
+                    (username,)
+                )
+                
+                predictions = {
+                    "short_term": None,
+                    "long_term": None
+                }
+                
+                for idx, row in enumerate(cursor.fetchall()):
+                    detector_type = "short_term" if idx == 0 else "long_term"
+                    try:
+                        contributions = json.loads(row[4]) if isinstance(row[4], str) else row[4]
+                    except:
+                        contributions = {}
+                    
+                    predictions[detector_type] = {
+                        "detector": row[0],
+                        "score": row[1],
+                        "confidence": row[2],
+                        "is_anomaly": bool(row[3]),
+                        "contributions": contributions,
+                        "summary": row[5],
+                        "created_at": row[6]
+                    }
+                
+                return predictions if predictions["short_term"] or predictions["long_term"] else None
+            except Exception:
+                return None
             finally:
                 cursor.close()

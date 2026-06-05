@@ -56,6 +56,14 @@ class ServerConfig:
         return self._env_bool("INSIEDR_ENABLE_PLAINTEXT_CRYPTO", False)
 
     @property
+    def enable_model_pipeline(self) -> bool:
+        return self._env_bool("INSIEDR_ENABLE_MODEL_PIPELINE", True)
+
+    @property
+    def model_inference_dir(self) -> str:
+        return os.environ.get("INSIEDR_MODEL_INFERENCE_DIR", "model-inference")
+
+    @property
     def fernet_key_env(self) -> str | None:
         return os.environ.get("INSIEDR_FERNET_KEY") or os.environ.get("FERNET_KEY")
 
@@ -88,6 +96,8 @@ class ServerConfig:
             "replay_window_hours": str(self.replay_window_hours),
             "enable_fernet": str(self.enable_fernet),
             "enable_plaintext_crypto": str(self.enable_plaintext_crypto),
+            "enable_model_pipeline": str(self.enable_model_pipeline),
+            "model_inference_dir": self.model_inference_dir,
         }
 
 

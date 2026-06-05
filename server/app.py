@@ -4,6 +4,7 @@ from flask import Flask
 
 from server.config import config
 from server.api.agents import bp as agents_bp
+from server.api.analysis import bp as analysis_bp
 from server.api.anomalies import bp as anomalies_bp
 from server.api.baseline import bp as baseline_bp
 from server.api.health import bp as health_bp
@@ -18,6 +19,7 @@ def create_app(*, storage=None, apply_migrations: bool = True) -> Flask:
     app = Flask(__name__)
     # register blueprints
     app.register_blueprint(agents_bp)
+    app.register_blueprint(analysis_bp)
     app.register_blueprint(anomalies_bp)
     app.register_blueprint(baseline_bp)
     app.register_blueprint(logs_bp)

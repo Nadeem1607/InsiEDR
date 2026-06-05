@@ -23,6 +23,7 @@ from shared.protocol import (
 )
 
 from server.config import config
+from server.model_bridge import bridge as model_bridge
 from server.plugin_registry import registry
 
 
@@ -232,6 +233,7 @@ def process_encrypted_request(req) -> tuple[int, dict[str, Any]]:
     try:
         _check_duplicate_policy(storage, envelope, payload)
         storage.store_raw_payload(envelope, payload)
+        model_bridge.process_payload(storage, payload)
     except Exception as exc:
         if isinstance(exc, IngestError):
             raise

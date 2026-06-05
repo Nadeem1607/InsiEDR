@@ -4,23 +4,66 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>InsiEDR Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-      :root { color-scheme: light; font-family: Arial, sans-serif; background: #f6f7f9; color: #18212f; }
+      :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f6f7f9; color: #18212f; }
+      * { box-sizing: border-box; }
       body { margin: 0; }
-      header { background: #ffffff; border-bottom: 1px solid #d9dde5; padding: 18px 24px; }
-      h1 { font-size: 24px; margin: 0; letter-spacing: 0; }
-      main { max-width: 1180px; margin: 0 auto; padding: 20px; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
-      .card { background: #ffffff; border: 1px solid #d9dde5; border-radius: 8px; padding: 14px; min-height: 92px; }
-      .label { color: #5c6678; font-size: 12px; text-transform: uppercase; }
-      .value { font-size: 28px; margin-top: 8px; }
-      section { margin-top: 22px; }
-      table { width: 100%; border-collapse: collapse; background: #ffffff; border: 1px solid #d9dde5; }
-      th, td { text-align: left; border-bottom: 1px solid #e7eaf0; padding: 10px; font-size: 14px; vertical-align: top; }
-      th { background: #eef1f6; color: #344055; }
-      .note { color: #5c6678; font-size: 13px; line-height: 1.4; }
-      .status { display: inline-block; padding: 2px 7px; border-radius: 999px; background: #e8f2ee; color: #17664a; }
-      .warn { background: #fff2d6; color: #795100; }
+      header { background: #ffffff; border-bottom: 1px solid #d9dde5; padding: 18px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+      h1 { font-size: 24px; margin: 0; letter-spacing: 0; font-weight: 600; }
+      main { max-width: 1400px; margin: 0 auto; padding: 20px; }
+      .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 30px; }
+      .summary-card { background: #ffffff; border: 1px solid #d9dde5; border-radius: 8px; padding: 16px; }
+      .summary-card .label { color: #5c6678; font-size: 12px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+      .summary-card .value { font-size: 32px; font-weight: 700; margin-top: 8px; color: #18212f; }
+      .summary-card .status { display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+      .status.healthy { background: #e8f2ee; color: #17664a; }
+      .status.warning { background: #fff2d6; color: #795100; }
+      .status.error { background: #fde8e8; color: #7a2121; }
+      
+      .user-selector { background: #ffffff; border: 1px solid #d9dde5; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+      .user-selector h2 { margin: 0 0 15px 0; font-size: 18px; }
+      .search-box { display: flex; gap: 10px; margin-bottom: 15px; }
+      .search-box input { flex: 1; padding: 10px 12px; border: 1px solid #d9dde5; border-radius: 6px; font-size: 14px; }
+      .search-box input:focus { outline: none; border-color: #4a90e2; box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1); }
+      .user-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 300px; overflow-y: auto; }
+      .user-item { padding: 12px; background: #f6f7f9; border: 1px solid #d9dde5; border-radius: 6px; cursor: pointer; font-size: 14px; text-align: center; transition: all 0.2s; }
+      .user-item:hover { background: #e8ecf1; border-color: #4a90e2; }
+      .user-item.selected { background: #4a90e2; color: white; border-color: #4a90e2; }
+      
+      section { margin-bottom: 40px; }
+      section h2 { margin: 0 0 20px 0; font-size: 20px; font-weight: 600; }
+      
+      .collectors-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }
+      .collector-card { background: #ffffff; border: 1px solid #d9dde5; border-radius: 8px; padding: 20px; }
+      .collector-card h3 { margin: 0 0 15px 0; font-size: 16px; font-weight: 600; color: #18212f; }
+      .collector-card .data-item { padding: 10px 0; border-bottom: 1px solid #e7eaf0; }
+      .collector-card .data-item:last-child { border-bottom: none; }
+      .collector-card .data-label { color: #5c6678; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+      .collector-card .data-value { font-size: 14px; margin-top: 4px; color: #18212f; font-weight: 500; word-break: break-word; }
+      .collector-card .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-top: 4px; }
+      .collector-card .status-badge.success { background: #e8f2ee; color: #17664a; }
+      .collector-card .status-badge.error { background: #fde8e8; color: #7a2121; }
+      
+      .chart-container { background: #ffffff; border: 1px solid #d9dde5; border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative; height: 400px; }
+      
+      .predictions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+      .prediction-card { background: #ffffff; border: 1px solid #d9dde5; border-radius: 8px; padding: 20px; }
+      .prediction-card h3 { margin: 0 0 15px 0; font-size: 16px; font-weight: 600; }
+      .prediction-card .prediction-item { padding: 12px; background: #f6f7f9; border-radius: 6px; margin-bottom: 10px; }
+      .prediction-card .prediction-item:last-child { margin-bottom: 0; }
+      .prediction-item .pred-label { color: #5c6678; font-size: 12px; font-weight: 600; }
+      .prediction-item .pred-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .pred-high { color: #d13834; }
+      .pred-medium { color: #f57c00; }
+      .pred-low { color: #17664a; }
+      
+      .empty-state { text-align: center; padding: 40px 20px; color: #5c6678; }
+      .empty-state p { margin: 0; font-size: 14px; }
+      
+      .loading { text-align: center; padding: 20px; color: #5c6678; }
+      .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #d9dde5; border-top-color: #4a90e2; border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
@@ -28,73 +71,287 @@
       <h1>InsiEDR Dashboard</h1>
     </header>
     <main>
-      <div class="grid" id="summary"></div>
+      <!-- Summary Cards -->
+      <div class="summary-grid" id="summary"></div>
 
-      <section>
-        <h2>Recent Ingestion</h2>
-        <table>
-          <thead><tr><th>Payload</th><th>Agent</th><th>Host</th><th>User</th><th>Status</th><th>Received</th></tr></thead>
-          <tbody id="logs"><tr><td colspan="6">Loading...</td></tr></tbody>
-        </table>
+      <!-- User Selector -->
+      <div class="user-selector">
+        <h2>Select User</h2>
+        <div class="search-box">
+          <input type="text" id="userSearch" placeholder="Search users..." />
+        </div>
+        <div class="user-list" id="userList"></div>
+      </div>
+
+      <!-- Collectors Data -->
+      <section id="collectorsSection" style="display: none;">
+        <h2>Collected Data</h2>
+        <div class="collectors-grid" id="collectorsContainer"></div>
       </section>
 
-      <section>
-        <h2>Agent Health</h2>
-        <table>
-          <thead><tr><th>Agent</th><th>Host</th><th>User</th><th>OS</th><th>Last Seen</th><th>Status</th></tr></thead>
-          <tbody id="agents"><tr><td colspan="6">Loading...</td></tr></tbody>
-        </table>
+      <!-- Risk Score Chart -->
+      <section id="riskChartSection" style="display: none;">
+        <h2>Risk Score History</h2>
+        <div class="chart-container">
+          <canvas id="riskChart"></canvas>
+        </div>
       </section>
 
-      <section>
-        <h2>Data Quality Notes</h2>
-        <p class="note">
-          File copy and removable-path features are heuristic observations. USB byte-transfer fields remain verify-required until byte telemetry is populated.
-          HTTP features are browser-history scoped, and network monitor data is passive optional metadata.
-        </p>
+      <!-- Model Predictions -->
+      <section id="predictionsSection" style="display: none;">
+        <h2>Model Predictions</h2>
+        <div class="predictions-grid" id="predictionsContainer"></div>
       </section>
+
+      <div id="emptyState" class="empty-state">
+        <p>Select a user to view their collected data and risk analysis</p>
+      </div>
     </main>
+
     <script>
+      let selectedUser = null;
+      let riskChart = null;
+
       async function getJson(url) {
         const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
       }
+
       function text(value) {
         return value === null || value === undefined || value === "" ? "-" : String(value);
       }
-      async function loadDashboard() {
-        const [stats, logs, agents, health] = await Promise.all([
-          getJson("/api/stats"),
-          getJson("/api/logs?limit=10"),
-          getJson("/api/agents?limit=10"),
-          getJson("/api/health")
-        ]);
-        const summary = document.getElementById("summary");
-        summary.innerHTML = [
-          ["Agents", stats.agents || 0],
-          ["Payloads", stats.logs || 0],
-          ["Collector Results", stats.collector_results || 0],
-          ["Anomalies", stats.anomalies || 0],
-          ["Database", health.database],
-          ["Crypto", health.crypto]
-        ].map(([label, value]) => `<div class="card"><div class="label">${label}</div><div class="value">${text(value)}</div></div>`).join("");
 
-        document.getElementById("logs").innerHTML = (logs.logs || []).map(row => `
-          <tr>
-            <td>${text(row.payload_id)}</td><td>${text(row.agent_id)}</td><td>${text(row.hostname)}</td>
-            <td>${text(row.username)}</td><td><span class="status">${text(row.validation_status)}</span></td><td>${text(row.received_at)}</td>
-          </tr>`).join("") || "<tr><td colspan=\"6\">No ingested payloads yet.</td></tr>";
-
-        document.getElementById("agents").innerHTML = (agents.agents || []).map(row => `
-          <tr>
-            <td>${text(row.agent_id)}</td><td>${text(row.hostname)}</td><td>${text(row.username_last_seen)}</td>
-            <td>${text(row.os_system)} ${text(row.os_release)}</td><td>${text(row.last_seen_at)}</td>
-            <td><span class="status">${text(row.status)}</span></td>
-          </tr>`).join("") || "<tr><td colspan=\"6\">No agents seen yet.</td></tr>";
+      function formatCollectorName(name) {
+        return name.replace(/-/g, ' ').replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       }
-      loadDashboard().catch(() => {
-        document.getElementById("summary").innerHTML = "<div class=\"card\"><div class=\"label\">Dashboard</div><div class=\"value warn\">Unavailable</div></div>";
-      });
+
+      function formatValue(value) {
+        if (Array.isArray(value)) return value.join(", ");
+        if (typeof value === 'object' && value !== null) return JSON.stringify(value, null, 2);
+        return text(value);
+      }
+
+      async function loadSummary() {
+        try {
+          const status = await getJson("/api/pc-status");
+          const health = await getJson("/api/health");
+          
+          const dbStatus = health.database === 'ok' ? 'healthy' : 'warning';
+          
+          const summary = document.getElementById("summary");
+          summary.innerHTML = [
+            ["Total PCs", status.total_pcs || 0],
+            ["Online PCs", status.online_pcs || 0],
+            ["Offline PCs", status.offline_pcs || 0]
+          ].map(([label, value]) => `
+            <div class="summary-card">
+              <div class="label">${label}</div>
+              <div class="value">${value}</div>
+            </div>
+          `).join("") + `
+            <div class="summary-card">
+              <div class="label">Database Health</div>
+              <div class="status ${dbStatus}">${dbStatus.toUpperCase()}</div>
+            </div>
+          `;
+        } catch (e) {
+          console.error("Failed to load summary:", e);
+          document.getElementById("summary").innerHTML = '<div class="summary-card error"><p>Failed to load summary</p></div>';
+        }
+      }
+
+      async function loadUsers() {
+        try {
+          const logs = await getJson("/api/logs?limit=10000");
+          const users = [...new Set((logs.logs || []).map(l => l.username).filter(u => u))].sort();
+          
+          const userList = document.getElementById("userList");
+          if (users.length === 0) {
+            userList.innerHTML = '<p class="empty-state"><p>No users found</p></p>';
+            return;
+          }
+          
+          userList.innerHTML = users.map(user => `
+            <div class="user-item" onclick="selectUser('${user}')">${text(user)}</div>
+          `).join("");
+          
+          const searchBox = document.getElementById("userSearch");
+          searchBox.addEventListener("input", (e) => filterUsers(e.target.value));
+        } catch (e) {
+          console.error("Failed to load users:", e);
+        }
+      }
+
+      function filterUsers(query) {
+        const items = document.querySelectorAll(".user-item");
+        const lowerQuery = query.toLowerCase();
+        items.forEach(item => {
+          item.style.display = item.textContent.toLowerCase().includes(lowerQuery) ? "" : "none";
+        });
+      }
+
+      async function selectUser(username) {
+        selectedUser = username;
+        document.querySelectorAll(".user-item").forEach(item => {
+          item.classList.toggle("selected", item.textContent === username);
+        });
+        
+        document.getElementById("emptyState").style.display = "none";
+        document.getElementById("collectorsSection").style.display = "block";
+        document.getElementById("riskChartSection").style.display = "block";
+        document.getElementById("predictionsSection").style.display = "block";
+        
+        document.getElementById("collectorsContainer").innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        document.getElementById("predictionsContainer").innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        
+        await Promise.all([loadCollectorData(), loadRiskHistory(), loadPredictions()]);
+      }
+
+      async function loadCollectorData() {
+        try {
+          const response = await getJson(`/api/user-collectors/${selectedUser}`);
+          const collectors = response.collectors || [];
+          
+          const html = collectors.map(collector => {
+            const payload = collector.payload || {};
+            const items = Object.entries(payload).slice(0, 8).map(([key, value]) => `
+              <div class="data-item">
+                <div class="data-label">${key.replace(/_/g, ' ')}</div>
+                <div class="data-value">${formatValue(value).substring(0, 100)}</div>
+              </div>
+            `).join("");
+            
+            const statusClass = collector.status === 'success' ? 'success' : 'error';
+            return `
+              <div class="collector-card">
+                <h3>${formatCollectorName(collector.collector)}</h3>
+                <div class="status-badge ${statusClass}">Last: ${collector.received_at ? new Date(collector.received_at).toLocaleDateString() : 'N/A'}</div>
+                ${items || '<div class="data-item"><p style="color: #999;">No data</p></div>'}
+              </div>
+            `;
+          }).join("");
+          
+          document.getElementById("collectorsContainer").innerHTML = html || '<p class="empty-state"><p>No collector data available</p></p>';
+        } catch (e) {
+          console.error("Failed to load collector data:", e);
+          document.getElementById("collectorsContainer").innerHTML = '<p class="empty-state"><p>Error loading data</p></p>';
+        }
+      }
+
+      async function loadRiskHistory() {
+        try {
+          const response = await getJson(`/api/user-risk-scores/${selectedUser}?limit=30`);
+          const riskScores = response.risk_scores || [];
+          
+          const timestamps = riskScores.map(r => new Date(r.created_at).toLocaleDateString());
+          const risks = riskScores.map(r => parseFloat(r.risk_score) || 0);
+          
+          if (riskChart) riskChart.destroy();
+          
+          const ctx = document.getElementById("riskChart").getContext("2d");
+          riskChart = new Chart(ctx, {
+            type: "line",
+            data: {
+              labels: timestamps,
+              datasets: [{
+                label: "Risk Score",
+                data: risks,
+                borderColor: "#d13834",
+                backgroundColor: "rgba(209, 56, 52, 0.1)",
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: "#d13834"
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: true } },
+              scales: {
+                y: { beginAtZero: true, max: 100, title: { display: true, text: "Risk Score" } }
+              }
+            }
+          });
+        } catch (e) {
+          console.error("Failed to load risk history:", e);
+        }
+      }
+
+      async function loadPredictions() {
+        try {
+          const response = await getJson(`/api/user-predictions/${selectedUser}`);
+          const predictions = response.predictions;
+          
+          if (!predictions || (!predictions.short_term && !predictions.long_term)) {
+            document.getElementById("predictionsContainer").innerHTML = '<p class="empty-state"><p>No predictions available yet</p></p>';
+            return;
+          }
+          
+          const predictionModels = {
+            "short_term": { label: "Short-Term Model", data: predictions.short_term },
+            "long_term": { label: "Long-Term Model", data: predictions.long_term }
+          };
+          
+          const html = Object.entries(predictionModels).map(([key, model]) => {
+            if (!model.data) return '';
+            
+            const pred = model.data;
+            const score = parseFloat(pred.score) || 0;
+            let riskClass, riskText;
+            
+            if (score < 33) {
+              riskClass = 'pred-low';
+              riskText = 'LOW';
+            } else if (score < 66) {
+              riskClass = 'pred-medium';
+              riskText = 'MEDIUM';
+            } else {
+              riskClass = 'pred-high';
+              riskText = 'HIGH';
+            }
+            
+            const factors = pred.contributions ? Object.keys(pred.contributions).slice(0, 3) : [];
+            
+            return `
+              <div class="prediction-card">
+                <h3>${model.label}</h3>
+                <div class="prediction-item">
+                  <div class="pred-label">Prediction</div>
+                  <div class="pred-value ${riskClass}">${riskText}</div>
+                </div>
+                <div class="prediction-item">
+                  <div class="pred-label">Score</div>
+                  <div class="pred-value">${score.toFixed(2)}</div>
+                </div>
+                <div class="prediction-item">
+                  <div class="pred-label">Confidence</div>
+                  <div class="pred-value">${(parseFloat(pred.confidence) * 100 || 0).toFixed(1)}%</div>
+                </div>
+                <div class="prediction-item">
+                  <div class="pred-label">Top Factors</div>
+                  <div class="pred-value">${factors.length > 0 ? factors.join(', ') : 'N/A'}</div>
+                </div>
+              </div>
+            `;
+          }).join("");
+          
+          document.getElementById("predictionsContainer").innerHTML = html || '<p class="empty-state"><p>No predictions available</p></p>';
+        } catch (e) {
+          console.error("Failed to load predictions:", e);
+          document.getElementById("predictionsContainer").innerHTML = '<p class="empty-state"><p>Error loading predictions</p></p>';
+        }
+      }
+
+      async function init() {
+        await loadSummary();
+        await loadUsers();
+      }
+
+      init().catch(console.error);
     </script>
   </body>
 </html>
