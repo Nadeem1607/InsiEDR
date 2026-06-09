@@ -353,6 +353,7 @@ def _empty_features() -> dict[str, Any]:
         "unique_usb_devices": 0,
         "daily_device_connect_count": 0,
         "daily_device_usage_flag": 0,
+        "last_usb_usage_time": None,
         "daily_removable_bytes_written": 0,
     }
 
@@ -380,6 +381,7 @@ def derive_features(raw: dict[str, Any]) -> dict[str, Any]:
             "usb_file_transfer_count": transfer_count,
             "large_usb_transfer": bool(transfer_bytes > LARGE_USB_THRESHOLD_MB * 1024 * 1024),
             "first_usb_usage_time": min((event.timestamp for event in connects), default=None),
+            "last_usb_usage_time": max((event.timestamp for event in connects + disconnects), default=None),
             "after_hours_usb_usage": sum(1 for event in connects + disconnects if _is_after_hours(event.timestamp)),
             "unique_usb_devices": len({event.device_id for event in connects} | set(raw["registry_devices"])),
             "daily_device_connect_count": len(connects),

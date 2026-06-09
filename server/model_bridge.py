@@ -40,6 +40,7 @@ FEATURE_ALIASES = {
     "daily_external_domain_ratio": ("external_domain_ratio",),
     "daily_device_connect_count": ("usb_connect_count",),
     "daily_unique_pc_count": ("unique_pc_count",),
+    "suspicious_url_count": ("watchlisted_url_count",),
 }
 
 DOMAIN_RISK_FEATURES = {

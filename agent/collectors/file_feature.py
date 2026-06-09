@@ -233,6 +233,7 @@ def _empty_features() -> dict[str, Any]:
         "sensitive_file_access": 0,
         "external_drive_file_copy": 0,
         "file_access_after_hours": 0,
+        "weekend_file_access": 0,
         "large_file_transfer_count": 0,
         "unusual_file_access_ratio": 0.0,
         "daily_files_to_removable_count": 0,
@@ -243,6 +244,8 @@ def _empty_features() -> dict[str, Any]:
         "daily_file_open_count": 0,
         "daily_file_write_count": 0,
         "daily_file_delete_count": 0,
+        "first_file_access_time": None,
+        "last_file_access_time": None,
         "recycle_bin_additions_count": 0,
         "recycle_bin_emptied_flag": 0,
         "mass_deletion_burst_count": 0,
@@ -308,9 +311,12 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             features["external_drive_file_copy"] += 1
             features["daily_files_to_removable_count"] += 1
 
-        local_time = ts.astimezone().time() if ts.tzinfo is not None else ts.time()
+        local_dt = ts.astimezone() if ts.tzinfo is not None else ts
+        local_time = local_dt.time()
         if not (bh_start <= local_time <= bh_end):
             features["file_access_after_hours"] += 1
+        if local_dt.weekday() >= 5:  # Saturday=5, Sunday=6
+            features["weekend_file_access"] += 1
 
         hashed_path = _hash_value(path)
         if hashed_path not in known_hashes:
@@ -331,6 +337,12 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     features["daily_file_open_count"] = features["file_open_count"]
     features["daily_file_write_count"] = features["file_write_count"]
     features["daily_file_delete_count"] = features["file_delete_count"]
+
+    # Temporal spread of file activity
+    timestamps = [event["ts"] for event in events if isinstance(event.get("ts"), datetime)]
+    if timestamps:
+        features["first_file_access_time"] = min(timestamps).isoformat()
+        features["last_file_access_time"] = max(timestamps).isoformat()
 
     if recycle_bin_deletes >= 10:
         features["recycle_bin_emptied_flag"] = 1
