@@ -4,7 +4,7 @@ from typing import Any, Mapping
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from shared.crypto_utils import b64decode, b64encode
+from shared.crypto_utils import CryptoConfigError, b64decode, b64encode
 from shared.protocol import CRYPTO_SCHEME_FERNET, PROTOCOL_VERSION, canonical_json_bytes, parse_json_bytes, utc_now_iso
 
 
@@ -40,6 +40,8 @@ class FernetCompatCrypto:
             raise FernetCompatError(f"missing Fernet envelope field: {exc}") from exc
         except InvalidToken as exc:
             raise FernetCompatError("Fernet token authentication failed") from exc
+        except (CryptoConfigError, TypeError, ValueError) as exc:
+            raise FernetCompatError("invalid Fernet envelope encoding") from exc
 
     def encrypt_payload(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return self.encrypt_bytes(canonical_json_bytes(payload))

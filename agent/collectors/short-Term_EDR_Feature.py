@@ -8,48 +8,20 @@ Sections:
     1. Configuration & Logging
     2. Collection Core     (Windows Event Log -> raw auth events)
     3. Processing / Feature Engineering (windowed derived features)
-    4. PostgreSQL Integration (batch insert, robust exception handling)
-    5. Built-in Validation & Testing Module
-    6. Main Orchestrator
+    4. Built-in Validation & Testing Module
+    5. Main Orchestrator
 
 Target features (per spec .md): S.No. 62 - 74
 """
 
 import os
+import json
 import sys
 import socket
 import logging
 import platform
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-
-# Third-party
-try:
-    import psycopg2
-    from psycopg2.extras import execute_values, RealDictCursor, Json
-    _HAS_PSYCOPG2 = True
-except ImportError:
-    class _PsycopgUnavailable:
-        class Error(Exception):
-            pass
-
-        class OperationalError(Error):
-            pass
-
-        class InterfaceError(Error):
-            pass
-
-        class DataError(Error):
-            pass
-
-    psycopg2 = _PsycopgUnavailable()
-    execute_values = None
-    RealDictCursor = None
-
-    def Json(value):
-        return value
-
-    _HAS_PSYCOPG2 = False
 
 # Windows-only import — handled gracefully for dev/test on non-Windows hosts
 IS_WINDOWS = platform.system().lower() == "windows"
@@ -76,21 +48,10 @@ CONFIG = {
     # Sliding window length (seconds) for all windowed features
     "WINDOW_SECONDS": int(os.getenv("EDR_WINDOW_SECONDS", "300")),
     # Lookback window for raw activity-rate features (must be >= WINDOW_SECONDS)
-    "LOOKBACK_SECONDS": int(os.getenv("EDR_LOOKBACK_SECONDS", os.getenv("EDR_BASELINE_SECONDS", "3600"))),  # 1 hr
+    "LOOKBACK_SECONDS": int(os.getenv("EDR_LOOKBACK_SECONDS", "3600")),  # 1 hr
     # Business-hours policy (local time). Outside = off-hours.
     "BUSINESS_HOUR_START": 9,
     "BUSINESS_HOUR_END": 18,
-    # Postgres connection
-    "PG": {
-        "host":     os.getenv("PGHOST", "localhost"),
-        "port":     int(os.getenv("PGPORT", "5432")),
-        "dbname":   os.getenv("PGDATABASE", "edr"),
-        "user":     os.getenv("PGUSER", "edr_agent"),
-        "password": os.getenv("PGPASSWORD", ""),
-        "connect_timeout": 10,
-    },
-    "PG_TABLE": os.getenv("EDR_TABLE", "edr_short_term_auth_features"),
-
     # Event log read cap (safety)
     "MAX_EVENTS_SCAN": 50_000,
 }
@@ -133,6 +94,48 @@ def _safe_int(v):
         return None
 
 
+def _is_event_log_access_denied(exc):
+    code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+    if code in {5, 1314}:
+        return True
+    text = str(exc).lower()
+    return "access is denied" in text or "privilege" in text
+
+
+def check_security_event_log_access():
+    """Return agent-safe Security log access diagnostics without reading events."""
+    if not IS_WINDOWS:
+        return {"windows": False, "channel": "Security", "readable": False, "reason": "not_windows"}
+    handle = None
+    try:
+        handle = win32evtlog.OpenEventLog("localhost", "Security")
+        return {"windows": True, "channel": "Security", "readable": True, "reason": ""}
+    except Exception as exc:
+        reason = "access_denied" if _is_event_log_access_denied(exc) else exc.__class__.__name__
+        return {"windows": True, "channel": "Security", "readable": False, "reason": reason}
+    finally:
+        if handle is not None:
+            win32evtlog.CloseEventLog(handle)
+
+
+from agent.state import default_state_dir, read_json_file, write_json_file
+
+BOOKMARK_FILE = default_state_dir() / "edr_bookmark.json"
+
+def _load_bookmark() -> int:
+    try:
+        if BOOKMARK_FILE.exists():
+            return int(read_json_file(BOOKMARK_FILE).get("last_record_number", 0))
+    except Exception:
+        pass
+    return 0
+
+def _save_bookmark(record_number: int):
+    try:
+        write_json_file(BOOKMARK_FILE, {"last_record_number": record_number, "updated_at": datetime.now(timezone.utc).isoformat()})
+    except Exception:
+        pass
+
 def collect_auth_events(lookback_seconds):
 
     if not IS_WINDOWS:
@@ -144,6 +147,9 @@ def collect_auth_events(lookback_seconds):
     log_type = "Security"
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=lookback_seconds)
     events_out = []
+
+    bookmark = _load_bookmark()
+    max_record = bookmark
 
     handle = None
     try:
@@ -158,6 +164,9 @@ def collect_auth_events(lookback_seconds):
 
             for ev in records:
                 scanned += 1
+                if ev.RecordNumber > max_record:
+                    max_record = ev.RecordNumber
+
                 eid = ev.EventID & 0xFFFF  # mask qualifiers
                 if eid not in (4624, 4625):
                     continue
@@ -173,6 +182,10 @@ def collect_auth_events(lookback_seconds):
                     # sequential-backwards read: once older than window we can stop
                     scanned = CONFIG["MAX_EVENTS_SCAN"]
                     break
+                
+                # Apply bookmark filter
+                if ev.RecordNumber <= bookmark:
+                    continue
 
                 parsed = _parse_event_strings(ev)
                 parsed.update({
@@ -183,8 +196,13 @@ def collect_auth_events(lookback_seconds):
                     "success": (eid == 4624),
                 })
                 events_out.append(parsed)
+        _save_bookmark(max_record)
 
     except Exception as e:
+        if _is_event_log_access_denied(e):
+            raise PermissionError(
+                "Security Event Log access denied; run the agent service as LocalSystem/Admin or grant Event Log Readers access."
+            ) from e
         log.exception("Failed reading Security event log: %s", e)
         # Return whatever we captured so far; upstream validator will flag
         return events_out
@@ -287,8 +305,7 @@ def compute_features(all_events):
         "edr_unique_logon_type_count_window":          len(logon_types),
 
 
-        "raw_sample": Json(
-            [
+        "raw_sample": [
                 {
                     "ts": e["timestamp_utc"].isoformat(),
                     "eid": e["event_id"],
@@ -297,138 +314,19 @@ def compute_features(all_events):
                     "auth_pkg": e["auth_package"],
                 }
                 for e in window[:50]  # cap payload
-            ]
-        ),
+            ],
+    }
+    features["_collector_quality"] = "local_only"
+    features["_feature_quality"] = {
+        key: ("local_only" if key in {"raw_sample"} else "exact")
+        for key in features
+        if not key.startswith("_")
     }
     return features
 
 
 
-# 4. POSTGRESQL INTEGRATION
-
-DDL_SQL = f"""
-CREATE TABLE IF NOT EXISTS {CONFIG['PG_TABLE']} (
-    id                                              BIGSERIAL PRIMARY KEY,
-    host                                            TEXT        NOT NULL,
-    collected_at_utc                                TIMESTAMPTZ NOT NULL,
-    window_seconds                                  INTEGER     NOT NULL,
-    edr_auth_event_count_window                     INTEGER     NOT NULL,
-    edr_success_auth_count_window                   INTEGER     NOT NULL,
-    edr_failed_auth_count_window                    INTEGER     NOT NULL,
-    edr_failed_auth_ratio_window                    DOUBLE PRECISION NOT NULL,
-    edr_unique_destination_computers_window         INTEGER     NOT NULL,
-    edr_unique_destination_users_window             INTEGER     NOT NULL,
-    edr_source_destination_pair_count_window        INTEGER     NOT NULL,
-    edr_unique_source_computers_per_user_window     INTEGER     NOT NULL,
-    edr_off_hours_auth_flag_window                  BOOLEAN     NOT NULL,
-    edr_weekend_auth_flag_window                    BOOLEAN     NOT NULL,
-    edr_auth_event_count_lookback                   INTEGER     NOT NULL,
-    edr_auth_events_per_minute_window               DOUBLE PRECISION NOT NULL,
-    edr_success_auth_events_per_minute_window       DOUBLE PRECISION NOT NULL,
-    edr_failed_auth_events_per_minute_window        DOUBLE PRECISION NOT NULL,
-    edr_unique_authentication_type_count_window     INTEGER     NOT NULL,
-    edr_unique_logon_type_count_window              INTEGER     NOT NULL,
-    raw_sample                                      JSONB
-);
-CREATE INDEX IF NOT EXISTS ix_{CONFIG['PG_TABLE']}_host_time
-    ON {CONFIG['PG_TABLE']} (host, collected_at_utc DESC);
-"""
-
-INSERT_COLS = [
-    "host", "collected_at_utc", "window_seconds",
-    "edr_auth_event_count_window", "edr_success_auth_count_window",
-    "edr_failed_auth_count_window", "edr_failed_auth_ratio_window",
-    "edr_unique_destination_computers_window", "edr_unique_destination_users_window",
-    "edr_source_destination_pair_count_window", "edr_unique_source_computers_per_user_window",
-    "edr_off_hours_auth_flag_window", "edr_weekend_auth_flag_window",
-    "edr_auth_event_count_lookback",
-    "edr_auth_events_per_minute_window",
-    "edr_success_auth_events_per_minute_window",
-    "edr_failed_auth_events_per_minute_window",
-    "edr_unique_authentication_type_count_window", "edr_unique_logon_type_count_window",
-    "raw_sample",
-]
-
-
-def _pg_connect():
-    """Returns a new psycopg2 connection. Raises on failure."""
-    if not _HAS_PSYCOPG2:
-        raise ImportError("psycopg2 is required only for standalone PostgreSQL insertion.")
-    try:
-        conn = psycopg2.connect(**CONFIG["PG"])
-        conn.autocommit = False
-        log.info("Connected to PostgreSQL %s:%s/%s",
-                 CONFIG["PG"]["host"], CONFIG["PG"]["port"], CONFIG["PG"]["dbname"])
-        return conn
-    except psycopg2.OperationalError as e:
-        log.error("PG connection failed (operational): %s", e)
-        raise
-    except Exception as e:
-        log.exception("PG connection failed (unexpected): %s", e)
-        raise
-
-
-def ensure_schema(conn):
-    try:
-        with conn.cursor() as cur:
-            cur.execute(DDL_SQL)
-        conn.commit()
-        log.info("Schema ensured for table '%s'", CONFIG["PG_TABLE"])
-    except Exception as e:
-        conn.rollback()
-        log.exception("Schema ensure failed: %s", e)
-        raise
-
-
-def insert_features_batch(conn, feature_rows):
-
-    if not _HAS_PSYCOPG2:
-        raise ImportError("psycopg2 is required only for standalone PostgreSQL insertion.")
-    if not feature_rows:
-        log.warning("insert_features_batch called with empty rows")
-        return 0
-
-    values = [tuple(row[c] for c in INSERT_COLS) for row in feature_rows]
-    sql = f"INSERT INTO {CONFIG['PG_TABLE']} ({', '.join(INSERT_COLS)}) VALUES %s RETURNING id"
-
-    try:
-        with conn.cursor() as cur:
-
-            returned = execute_values(cur, sql, values, page_size=500, fetch=True)
-            inserted = len(returned)
-        conn.commit()
-        log.info("Inserted %d row(s) into %s", inserted, CONFIG["PG_TABLE"])
-        return inserted
-    except (psycopg2.InterfaceError, psycopg2.OperationalError) as e:
-        conn.rollback()
-        log.error("Connection dropped/timed out during insert: %s", e)
-        raise
-    except psycopg2.DataError as e:
-        conn.rollback()
-        log.error("Data-type mismatch during insert: %s", e)
-        raise
-    except Exception as e:
-        conn.rollback()
-        log.exception("Unexpected insert failure: %s", e)
-        raise
-
-
-def fetch_last_row(conn, host):
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                f"SELECT * FROM {CONFIG['PG_TABLE']} WHERE host=%s "
-                f"ORDER BY collected_at_utc DESC LIMIT 1",
-                (host,),
-            )
-            return cur.fetchone()
-    except Exception as e:
-        log.exception("fetch_last_row failed: %s", e)
-        return None
-
-
-
-# 5. BUILT-IN VALIDATION & TESTING MODULE
+# 4. BUILT-IN VALIDATION & TESTING MODULE
 
 EXPECTED_FEATURE_KEYS = {
     "edr_auth_event_count_window":                   int,
@@ -506,37 +404,8 @@ def validate_data(features):
     return (len(errors) == 0), errors
 
 
-def validate_db(conn, host):
-
-    errors = []
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-            if cur.fetchone()[0] != 1:
-                errors.append("SELECT 1 did not return 1")
-
-            cur.execute(
-                "SELECT to_regclass(%s)", (CONFIG["PG_TABLE"],)
-            )
-            if cur.fetchone()[0] is None:
-                errors.append(f"target table {CONFIG['PG_TABLE']} does not exist")
-
-        last = fetch_last_row(conn, host)
-        if last is None:
-            errors.append(f"no rows found for host={host} after insert")
-        else:
-            log.info("Last row for %s at %s (id=%s)",
-                     host, last["collected_at_utc"], last["id"])
-
-    except Exception as e:
-        errors.append(f"DB validation exception: {e}")
-
-    return (len(errors) == 0), errors
-
-
-
 def collect():
-    """Agent-safe entry point: collect short-term EDR features without PostgreSQL writes."""
+    """Agent-safe entry point: collect short-term endpoint telemetry features."""
     raw_events = collect_auth_events(CONFIG["LOOKBACK_SECONDS"])
     return compute_features(raw_events)
 
@@ -568,7 +437,7 @@ def main():
         print(f"ERROR: feature computation failed -> {e}")
         sys.exit(3)
 
-    # --- Validate collected data BEFORE hitting the DB
+    # --- Validate collected data before printing local output
     ok, errs = validate_data(features)
     if not ok:
         print("ERROR: data validation failed:")
@@ -576,35 +445,7 @@ def main():
             print(f"  - {e}")
         sys.exit(4)
 
-    # --- DB insert
-    conn = None
-    try:
-        conn = _pg_connect()
-        ensure_schema(conn)
-        insert_features_batch(conn, [features])
-
-        db_ok, db_errs = validate_db(conn, features["host"])
-        if not db_ok:
-            print("ERROR: DB validation failed:")
-            for e in db_errs:
-                print(f"  - {e}")
-            sys.exit(5)
-
-    except psycopg2.Error as e:
-        print(f"ERROR: database failure -> {e.pgerror or e}")
-        sys.exit(6)
-    except Exception as e:
-        print(f"ERROR: unexpected failure -> {e}")
-        sys.exit(7)
-    finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-
-    print("Data is correctly collected and stored in PostgreSQL")
+    print(json.dumps(features, indent=2, default=str))
 
 
 if __name__ == "__main__":

@@ -31,8 +31,16 @@ def test_network_monitor_collects_passive_json_serializable_features(monkeypatch
         laddr = Address("127.0.0.1")
         raddr = Address("10.0.0.5")
 
+    class IfAddr:
+        family = network_monitor.socket.AF_INET
+        address = "192.0.2.10"
+        netmask = "255.255.255.0"
+        broadcast = "192.0.2.255"
+        ptp = None
+
     monkeypatch.setattr(network_monitor.psutil, "net_io_counters", lambda pernic=False: {"eth0": Counters()} if pernic else Counters())
     monkeypatch.setattr(network_monitor.psutil, "net_if_stats", lambda: {"eth0": IfStat()})
+    monkeypatch.setattr(network_monitor.psutil, "net_if_addrs", lambda: {"eth0": [IfAddr()]})
     monkeypatch.setattr(network_monitor.psutil, "net_connections", lambda kind: [Conn()])
 
     features = network_monitor.collect_features()
@@ -41,6 +49,8 @@ def test_network_monitor_collects_passive_json_serializable_features(monkeypatch
     assert features["network_interfaces_up_count"] == 1
     assert features["network_active_connection_count"] == 1
     assert features["network_unique_remote_address_count"] == 1
+    assert features["network_interfaces"][0]["errors_out"] == 1
+    assert features["network_interfaces"][0]["addresses"][0]["family"] == "ipv4"
     assert "suspicious" not in json.dumps(features).lower()
     assert "alert" not in json.dumps(features).lower()
     json.dumps(features)

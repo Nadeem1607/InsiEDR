@@ -72,7 +72,7 @@ def test_successful_retry_deletes_queued_payload(tmp_path):
 
     summary = transport.retry_queued()
 
-    assert summary == {"attempted": 1, "sent": 1, "retained": 0}
+    assert summary == {"attempted": 1, "sent": 1, "retained": 0, "dead_lettered": 0}
     assert session.calls == 1
     assert queue.count() == 0
 

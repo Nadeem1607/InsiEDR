@@ -6,7 +6,7 @@ from typing import Any, Mapping
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from shared.crypto_utils import b64decode, b64encode, key_fingerprint, normalize_aes_key
+from shared.crypto_utils import CryptoConfigError, b64decode, b64encode, key_fingerprint, normalize_aes_key
 from shared.protocol import CRYPTO_SCHEME_AESGCM, PROTOCOL_VERSION, canonical_json_bytes, parse_json_bytes, utc_now_iso
 
 
@@ -49,9 +49,15 @@ class AESGCMCrypto:
             raise AESGCMCryptoError(f"missing AES-GCM envelope field: {exc}") from exc
         except InvalidTag as exc:
             raise AESGCMCryptoError("AES-GCM authentication failed") from exc
+        except (CryptoConfigError, TypeError, ValueError) as exc:
+            raise AESGCMCryptoError("invalid AES-GCM envelope encoding") from exc
 
     def encrypt_payload(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        return self.encrypt_bytes(canonical_json_bytes(payload))
+        envelope = self.encrypt_bytes(canonical_json_bytes(payload))
+        payload_id = payload.get("payload_id")
+        if isinstance(payload_id, str) and payload_id:
+            envelope["payload_id"] = payload_id
+        return envelope
 
     def decrypt_payload(self, envelope: Mapping[str, Any]) -> dict[str, Any]:
         return parse_json_bytes(self.decrypt_bytes(envelope))

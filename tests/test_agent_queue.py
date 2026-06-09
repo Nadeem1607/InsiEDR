@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import stat
+from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from agent.queue.local_queue import LocalEncryptedQueue
 
@@ -35,4 +39,60 @@ def test_queue_corruption_is_quarantined(tmp_path):
     (tmp_path / "broken.json").write_text("{not-json", encoding="utf-8")
 
     assert list(queue.iter_items()) == []
-    assert list(tmp_path.glob("*.corrupt"))
+    assert list((tmp_path / "dead_letter").glob("broken.json.invalid*"))
+
+
+def test_queue_rejects_malformed_envelope_without_leaving_tmp_file(tmp_path):
+    queue = LocalEncryptedQueue(tmp_path)
+
+    with pytest.raises(ValueError):
+        queue.enqueue({"scheme": "aes-256-gcm", "nonce": "n"}, {})
+
+    assert queue.count() == 0
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_queue_item_count_is_bounded(tmp_path):
+    queue = LocalEncryptedQueue(tmp_path, max_items=2)
+
+    for index in range(3):
+        queue.enqueue({"scheme": "aes-256-gcm", "nonce": "n", "ciphertext": "c", "payload_id": str(index)})
+
+    assert queue.count() == 2
+    assert queue.dead_letter_count() == 1
+
+
+def test_queue_disk_usage_is_bounded(tmp_path):
+    queue = LocalEncryptedQueue(tmp_path, max_bytes=260)
+
+    for index in range(3):
+        queue.enqueue(
+            {
+                "scheme": "aes-256-gcm",
+                "nonce": "n",
+                "ciphertext": "c" * 80,
+                "payload_id": str(index),
+            }
+        )
+
+    assert queue.disk_usage_bytes() <= 260
+    assert queue.dead_letter_count() >= 1
+
+
+def test_queue_age_is_bounded(tmp_path):
+    queue = LocalEncryptedQueue(tmp_path, max_age_days=1)
+    old = tmp_path / "old.json"
+    old.write_text(
+        json.dumps(
+            {
+                "created_at": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+                "payload_id": "old",
+                "headers": {},
+                "envelope": {"scheme": "aes-256-gcm", "nonce": "n", "ciphertext": "c", "payload_id": "old"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert list(queue.iter_items()) == []
+    assert queue.dead_letter_count() == 1

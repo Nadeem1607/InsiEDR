@@ -24,6 +24,11 @@ class RecordingSession:
         return self.responses.pop(0)
 
 
+class FalsyRecordingSession(RecordingSession):
+    def __bool__(self):
+        return False
+
+
 def _envelope(payload_id="p1"):
     return {"scheme": "aes-256-gcm", "nonce": "n", "ciphertext": "c", "payload_id": payload_id}
 
@@ -75,7 +80,6 @@ def test_timeout_network_and_http_errors_queue_payload(tmp_path):
     cases = [
         RecordingSession(exc=requests.Timeout("slow")),
         RecordingSession(exc=requests.ConnectionError("offline")),
-        RecordingSession([Response(400)]),
         RecordingSession([Response(500)]),
     ]
 
@@ -90,6 +94,23 @@ def test_timeout_network_and_http_errors_queue_payload(tmp_path):
         assert queue.count() == 1
 
 
+def test_permanent_http_error_moves_live_payload_to_dead_letter(tmp_path):
+    queue = LocalEncryptedQueue(tmp_path)
+    transport = TelemetryTransport(
+        server_url="https://server.example/api/logs",
+        queue=queue,
+        session=RecordingSession([Response(401)]),
+    )
+
+    result = transport.send_or_queue(_envelope("permanent"), {})
+
+    assert not result.ok
+    assert not result.queued
+    assert result.dead_lettered
+    assert queue.count() == 0
+    assert queue.dead_letter_count() == 1
+
+
 def test_retry_failure_preserves_queue_and_stops_before_later_items(tmp_path):
     queue = LocalEncryptedQueue(tmp_path)
     queue.enqueue(_envelope("first"), {})
@@ -99,9 +120,23 @@ def test_retry_failure_preserves_queue_and_stops_before_later_items(tmp_path):
 
     summary = transport.retry_queued()
 
-    assert summary == {"attempted": 1, "sent": 0, "retained": 1}
+    assert summary == {"attempted": 1, "sent": 0, "retained": 1, "dead_lettered": 0}
     assert len(session.calls) == 1
     assert queue.count() == 2
+
+
+def test_retry_permanent_http_error_dead_letters_and_continues(tmp_path):
+    queue = LocalEncryptedQueue(tmp_path)
+    queue.enqueue(_envelope("first"), {})
+    queue.enqueue(_envelope("second"), {})
+    session = RecordingSession([Response(403), Response(204)])
+    transport = TelemetryTransport(server_url="https://server.example/api/logs", queue=queue, session=session)
+
+    summary = transport.retry_queued()
+
+    assert summary == {"attempted": 2, "sent": 1, "retained": 0, "dead_lettered": 1}
+    assert queue.count() == 0
+    assert queue.dead_letter_count() == 1
 
 
 def test_retry_success_deletes_each_sent_payload_once(tmp_path):
@@ -113,6 +148,16 @@ def test_retry_success_deletes_each_sent_payload_once(tmp_path):
 
     summary = transport.retry_queued()
 
-    assert summary == {"attempted": 2, "sent": 2, "retained": 0}
+    assert summary == {"attempted": 2, "sent": 2, "retained": 0, "dead_lettered": 0}
     assert len(session.calls) == 2
     assert queue.count() == 0
+
+
+def test_explicit_falsy_session_is_used_for_dependency_injection(tmp_path):
+    session = FalsyRecordingSession([Response(204)])
+    transport = TelemetryTransport(server_url="https://server.example/api/logs", queue=LocalEncryptedQueue(tmp_path), session=session)
+
+    result = transport.send_encrypted(_envelope(), {})
+
+    assert result.ok
+    assert len(session.calls) == 1

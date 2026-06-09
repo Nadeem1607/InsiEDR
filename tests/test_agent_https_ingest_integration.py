@@ -137,7 +137,16 @@ def test_agent_posts_encrypted_payload_to_local_https_ingest(tmp_path):
         assert b"alice" not in record["body"]
 
         envelope = json.loads(record["body"].decode("utf-8"))
+        assert envelope["payload_id"] == summary.payload_id
+        assert envelope["protocol_version"] == "2.0"
+        assert envelope["scheme"] == "aes-256-gcm"
+        assert envelope["key_id"]
+        assert envelope["nonce"]
+        assert envelope["ciphertext"]
+        assert envelope["created_at"]
         decrypted = AESGCMCrypto(b"1" * 32).decrypt_payload(envelope)
+        assert decrypted["schema"] == "insiedr.agent.telemetry.v1"
+        assert decrypted["payload_id"] == summary.payload_id
         assert decrypted["collectors"][0]["payload"]["daily_logon_count"] == 2
     finally:
         server.shutdown()

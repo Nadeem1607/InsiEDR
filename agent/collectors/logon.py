@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-logon.py — Windows Logon Feature Collector for Insider Threat Detection
+logon.py — Windows Logon Feature Collector for endpoint telemetry
 Dependencies:
-  pip install pywin32 psycopg2-binary
+  pip install pywin32
 """
 
 import json
@@ -28,16 +28,6 @@ if _IS_WINDOWS:
     import win32security
     import pywintypes
 
-try:
-    import psycopg2
-    import psycopg2.extras
-    _HAS_PSYCOPG2 = True
-except ImportError:
-    _HAS_PSYCOPG2 = False
-
-
-
-
 # Logging & Config
 
 logging.basicConfig(
@@ -47,18 +37,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("logon_collector")
 
-DB_CONFIG = {
-    "host": os.getenv("INSIEDR_DB_HOST", "localhost"),
-    "port": int(os.getenv("INSIEDR_DB_PORT", "5432")),
-    "dbname": os.getenv("INSIEDR_DB_NAME", "insiedr"),
-    "user": os.getenv("INSIEDR_DB_USER", "insiedr"),
-    "password": os.getenv("INSIEDR_DB_PASSWORD", "changeme"),
-}
-
 BUSINESS_HOUR_START = 8   # 08:00
 BUSINESS_HOUR_END = 18    # 18:00
 SESSION_TIMEOUT_HOURS = 12
-DB_BATCH_SIZE = 500
 TABLE_NAME = "logon_features"
 LOCAL_HOSTNAME = os.getenv("COMPUTERNAME", "UNKNOWN").upper()
 
@@ -71,6 +52,30 @@ def _assert_windows():
         raise EnvironmentError("Logon feature collection requires Windows.")
 
 
+def _is_access_denied(exc: BaseException) -> bool:
+    code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+    if code in {5, 1314}:
+        return True
+    text = str(exc).lower()
+    return "access is denied" in text or "privilege" in text
+
+
+def check_security_event_log_access(server: str = "localhost") -> Dict[str, Any]:
+    """Return agent-safe Security log access diagnostics without reading events."""
+    if not _IS_WINDOWS:
+        return {"windows": False, "channel": "Security", "readable": False, "reason": "not_windows"}
+    handle = None
+    try:
+        handle = win32evtlog.OpenEventLog(server, "Security")
+        return {"windows": True, "channel": "Security", "readable": True, "reason": ""}
+    except Exception as exc:
+        reason = "access_denied" if _is_access_denied(exc) else exc.__class__.__name__
+        return {"windows": True, "channel": "Security", "readable": False, "reason": reason}
+    finally:
+        if handle is not None:
+            win32evtlog.CloseEventLog(handle)
+
+
 
 def _build_time_filter(target_date: datetime) -> Tuple[datetime, datetime]:
     day_start = datetime.combine(target_date.date(), dtime.min)
@@ -79,21 +84,46 @@ def _build_time_filter(target_date: datetime) -> Tuple[datetime, datetime]:
 
 
 
+from agent.state import default_state_dir, read_json_file, write_json_file
+
+BOOKMARK_FILE = default_state_dir() / "logon_bookmark.json"
+
+def _load_bookmark() -> int:
+    try:
+        if BOOKMARK_FILE.exists():
+            return int(read_json_file(BOOKMARK_FILE).get("last_record_number", 0))
+    except Exception:
+        pass
+    return 0
+
+def _save_bookmark(record_number: int):
+    try:
+        write_json_file(BOOKMARK_FILE, {"last_record_number": record_number, "updated_at": datetime.now().isoformat()})
+    except Exception:
+        pass
+
 def query_security_events(
     event_ids: List[int],
     day_start: datetime,
     day_end: datetime,
     server: str = "localhost",
 ) -> List[Dict[str, Any]]:
-    """Query Windows Security Event Log with UTC-to-Local normalization."""
+    """Query Windows Security Event Log with UTC-to-Local normalization and bookmarking."""
     _assert_windows()
     events = []
     log_type = "Security"
     flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
 
+    bookmark = _load_bookmark()
+    max_record = bookmark
+
     try:
         handle = win32evtlog.OpenEventLog(server, log_type)
     except Exception as exc:
+        if _is_access_denied(exc):
+            raise PermissionError(
+                "Security Event Log access denied; run the agent service as LocalSystem/Admin or grant Event Log Readers access."
+            ) from exc
         logger.error("Cannot open Security log on %s: %s", server, exc)
         return events
 
@@ -103,6 +133,10 @@ def query_security_events(
             if not records:
                 break
             for record in records:
+                # Update high-water mark for the next cycle's bookmark
+                if record.RecordNumber > max_record:
+                    max_record = record.RecordNumber
+
                 raw_ts = record.TimeGenerated
                 if not hasattr(raw_ts, "year"): continue
                 
@@ -110,8 +144,13 @@ def query_security_events(
                 ts = raw_ts.replace(tzinfo=timezone.utc).astimezone(None).replace(tzinfo=None)
 
                 if ts < day_start:
+                    _save_bookmark(max_record)
                     return events  
                 if ts > day_end:
+                    continue
+
+                # Apply bookmark filter: skip events we've seen before
+                if record.RecordNumber <= bookmark:
                     continue
 
                 eid = record.EventID & 0xFFFF
@@ -122,6 +161,7 @@ def query_security_events(
                 evt = _parse_event_strings(eid, strings, ts)
                 if evt:
                     events.append(evt)
+        _save_bookmark(max_record)
     except Exception as exc:
         logger.warning("Error reading event log: %s", exc)
     finally:
@@ -166,6 +206,22 @@ def _parse_event_strings(event_id: int, strings: tuple, timestamp: datetime) -> 
                 "logon_type": int(strings[10]) if strings[10].isdigit() else 0,
                 "logon_id": "", "workstation": LOCAL_HOSTNAME, "source_ip": "-",
             }
+        elif event_id in (4800, 4801):
+            if len(strings) < 2: return None
+            user = strings[1].upper()
+            if not user or user.endswith("$") or user in ("SYSTEM", "-"): return None
+            return {
+                "event_id": event_id, "timestamp": timestamp, "user": user,
+                "logon_type": 0, "logon_id": strings[3] if len(strings) > 3 else "", "workstation": LOCAL_HOSTNAME, "source_ip": "-",
+            }
+        elif event_id in (4778, 4779):
+            if len(strings) < 1: return None
+            user = strings[0].upper()
+            if not user or user.endswith("$") or user in ("SYSTEM", "-"): return None
+            return {
+                "event_id": event_id, "timestamp": timestamp, "user": user,
+                "logon_type": 0, "logon_id": strings[2] if len(strings) > 2 else "", "workstation": LOCAL_HOSTNAME, "source_ip": "-",
+            }
     except Exception:
         return None
     return None
@@ -185,12 +241,16 @@ def derive_features(
     target_date: datetime,
     historical_pcs: Optional[Dict[str, Set[str]]] = None,
 ) -> Dict[str, Dict[str, Any]]:
-    """Compute all 16 logon features per user with persistence support."""
+    """Compute all logon features per user with persistence support."""
     if historical_pcs is None: historical_pcs = defaultdict(set)
 
     logons = defaultdict(list)
     logoffs = defaultdict(list)
     failed = defaultdict(list)
+    locks = defaultdict(list)
+    unlocks = defaultdict(list)
+    reconnects = defaultdict(list)
+    disconnects = defaultdict(list)
 
     for evt in events:
         user = evt["user"]
@@ -198,12 +258,21 @@ def derive_features(
         if eid == 4624: logons[user].append(evt)
         elif eid in (4634, 4647): logoffs[user].append(evt)
         elif eid == 4625: failed[user].append(evt)
+        elif eid == 4800: locks[user].append(evt)
+        elif eid == 4801: unlocks[user].append(evt)
+        elif eid == 4778: reconnects[user].append(evt)
+        elif eid == 4779: disconnects[user].append(evt)
 
     result = {}
-    for user in (set(logons) | set(logoffs) | set(failed)):
+    all_users = set(logons) | set(logoffs) | set(failed) | set(locks) | set(unlocks) | set(reconnects) | set(disconnects)
+    for user in all_users:
         u_logons = logons[user]
         u_logoffs = logoffs[user]
         u_failed = failed[user]
+        u_locks = locks[user]
+        u_unlocks = unlocks[user]
+        u_reconnects = reconnects[user]
+        u_disconnects = disconnects[user]
 
         # S1, S13
         logon_count = len(u_logons)
@@ -263,6 +332,22 @@ def derive_features(
             for c in pc_counts.values():
                 p = c / valid_logon_count
                 entropy -= p * math.log2(p)
+                
+        # Interactive Session Metrics
+        screen_lock_count = len(u_locks)
+        screen_unlock_count = len(u_unlocks)
+        rdp_reconnect_count = len(u_reconnects)
+        rdp_disconnect_count = len(u_disconnects)
+        
+        interaction_events = sorted(u_locks + u_unlocks, key=lambda e: e["timestamp"])
+        interactive_duration = 0.0
+        last_unlock_time = None
+        for e in interaction_events:
+            if e["event_id"] == 4801:
+                last_unlock_time = e["timestamp"]
+            elif e["event_id"] == 4800 and last_unlock_time:
+                interactive_duration += (e["timestamp"] - last_unlock_time).total_seconds()
+                last_unlock_time = None
         
         result[user] = {
             "user": user, 
@@ -284,109 +369,27 @@ def derive_features(
             "daily_new_pc_count": daily_new_pc_count,
             "daily_pc_access_entropy": round(entropy, 4), 
             "daily_unique_pc_count": daily_unique_pc_count,
+            "screen_lock_count": screen_lock_count,
+            "screen_unlock_count": screen_unlock_count,
+            "rdp_reconnect_count": rdp_reconnect_count,
+            "rdp_disconnect_count": rdp_disconnect_count,
+            "interactive_duration_seconds": round(interactive_duration, 2),
             "workstations_seen": list(pcs_today | prev_pcs),
             "collected_at": datetime.now().isoformat()
         }
     return result
 
 
-#  SECTION 3 — DATABASE INSERTION
-
-CREATE_TABLE_SQL = f"""
-CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-    id BIGSERIAL PRIMARY KEY, "user" VARCHAR(128) NOT NULL, date DATE NOT NULL, hostname VARCHAR(128) NOT NULL,
-    logon_count INTEGER DEFAULT 0, logoff_count INTEGER DEFAULT 0, after_hours_logon INTEGER DEFAULT 0,
-    weekend_logon INTEGER DEFAULT 0, unique_pc_count INTEGER DEFAULT 0, session_duration_avg DOUBLE PRECISION DEFAULT 0,
-    session_duration_max DOUBLE PRECISION DEFAULT 0, first_logon_time TIMESTAMP, last_logoff_time TIMESTAMP,
-    remote_logon_count INTEGER DEFAULT 0, daily_failed_login_ratio DOUBLE PRECISION DEFAULT 0,
-    daily_after_hours_logon_ratio DOUBLE PRECISION DEFAULT 0, daily_logon_count INTEGER DEFAULT 0,
-    daily_new_pc_count INTEGER DEFAULT 0, daily_pc_access_entropy DOUBLE PRECISION DEFAULT 0,
-    daily_unique_pc_count INTEGER DEFAULT 0, workstations_seen JSONB, collected_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE ("user", date, hostname)
-);
-"""
-
-INSERT_COLUMNS = [
-    "user", "date", "hostname", "logon_count", "logoff_count", "after_hours_logon",
-    "weekend_logon", "unique_pc_count", "session_duration_avg", "session_duration_max",
-    "first_logon_time", "last_logoff_time", "remote_logon_count", "daily_failed_login_ratio",
-    "daily_after_hours_logon_ratio", "daily_logon_count", "daily_new_pc_count",
-    "daily_pc_access_entropy", "daily_unique_pc_count", "workstations_seen", "collected_at"
-]
-
-UPSERT_SQL = f"""
-INSERT INTO {TABLE_NAME} ({', '.join(f'"{c}"' for c in INSERT_COLUMNS)})
-VALUES ({', '.join(['%s'] * len(INSERT_COLUMNS))})
-ON CONFLICT ("user", date, hostname)
-DO UPDATE SET
-    logon_count                 = EXCLUDED.logon_count,
-    logoff_count                = EXCLUDED.logoff_count,
-    after_hours_logon           = EXCLUDED.after_hours_logon,
-    weekend_logon               = EXCLUDED.weekend_logon,
-    unique_pc_count             = EXCLUDED.unique_pc_count,
-    session_duration_avg        = EXCLUDED.session_duration_avg,
-    session_duration_max        = EXCLUDED.session_duration_max,
-    first_logon_time            = EXCLUDED.first_logon_time,
-    last_logoff_time            = EXCLUDED.last_logoff_time,
-    remote_logon_count          = EXCLUDED.remote_logon_count,
-    daily_failed_login_ratio    = EXCLUDED.daily_failed_login_ratio,
-    daily_after_hours_logon_ratio = EXCLUDED.daily_after_hours_logon_ratio,
-    daily_logon_count           = EXCLUDED.daily_logon_count,
-    daily_new_pc_count          = EXCLUDED.daily_new_pc_count,
-    daily_pc_access_entropy     = EXCLUDED.daily_pc_access_entropy,
-    daily_unique_pc_count       = EXCLUDED.daily_unique_pc_count,
-    workstations_seen           = EXCLUDED.workstations_seen,
-    collected_at                = EXCLUDED.collected_at
-"""
-
-def get_db_connection():
-    if not _HAS_PSYCOPG2:
-        raise ImportError("psycopg2 is required for DB insertion.")
-    conn = psycopg2.connect(**DB_CONFIG)
-    conn.autocommit = False
-    return conn
-
-
-def fetch_historical_pcs(conn) -> Dict[str, Set[str]]:
-    hist = defaultdict(set)
-    try:
-        with conn.cursor() as cur:
-            cur.execute(f"SELECT \"user\", workstations_seen FROM {TABLE_NAME}")
-            for u, pcs in cur.fetchall():
-                if pcs:
-                    data = json.loads(pcs) if isinstance(pcs, str) else pcs
-                    if isinstance(data, list):
-                        hist[u].update(data)
-    except Exception as e:
-        logger.debug("History fetch error: %s", e)
-    return hist
-
-
-
-def insert_features(conn, features: Dict[str, Dict[str, Any]]) -> int:
-    rows = []
-    for f in features.values():
-        row = tuple(f[c] if c != "workstations_seen" else json.dumps(f[c]) for c in INSERT_COLUMNS)
-        rows.append(row)
-    
-    if not rows: return 0
-    try:
-        with conn.cursor() as cur:
-            psycopg2.extras.execute_batch(cur, UPSERT_SQL, rows)
-        conn.commit()
-        return len(rows)
-    except Exception as exc:
-        conn.rollback()
-        logger.error("DB insert failed: %s", exc)
-        raise
-
+#  SECTION 3 - AGENT COLLECTION
 
 def collect(target_date: Optional[datetime] = None) -> Dict[str, Dict[str, Any]]:
-    """Agent-safe entry point: collect and derive features without PostgreSQL writes."""
+    """Agent-safe entry point: collect and derive endpoint telemetry features."""
     selected_date = target_date or datetime.now()
     day_start, day_end = _build_time_filter(selected_date)
-    events = query_security_events([4624, 4634, 4647, 4625], day_start, day_end)
-    return derive_features(events, selected_date)
+    events = query_security_events([4624, 4634, 4647, 4625, 4800, 4801, 4778, 4779], day_start, day_end)
+    features = derive_features(events, selected_date)
+    features["_collector_quality"] = "heuristic"
+    return features
 
 
 def collect_features() -> Dict[str, Dict[str, Any]]:
@@ -420,7 +423,7 @@ class TestReport:
         total = len(self._results)
         print("-" * 64)
         print(f"  {self.suite_name}: {passed}/{total} passed")
-        print("  All features are being collected correctly" if self.all_passed else "  Feature collection issues detected")
+        print("  All features are being collected correctly" if self.all_passed else "  Feature collection issues found")
         print("-" * 64)
 
 def run_tests(skip_db: bool = False) -> bool:
@@ -434,9 +437,13 @@ def run_tests(skip_db: bool = False) -> bool:
     events = [
         # ALICE: 2 logons, 1 logoff, 1 fail
         {"event_id": 4624, "timestamp": base, "user": "ALICE", "logon_type": 2, "logon_id": "0x1", "workstation": "WS1"},
+        {"event_id": 4801, "timestamp": base + timedelta(minutes=5), "user": "ALICE", "logon_type": 0, "logon_id": "0x1", "workstation": "WS1"},
+        {"event_id": 4800, "timestamp": base + timedelta(minutes=15), "user": "ALICE", "logon_type": 0, "logon_id": "0x1", "workstation": "WS1"},
         {"event_id": 4624, "timestamp": base.replace(hour=22), "user": "ALICE", "logon_type": 3, "logon_id": "0x2", "workstation": "WS1"},
         {"event_id": 4634, "timestamp": base + timedelta(hours=1), "user": "ALICE", "logon_type": 0, "logon_id": "0x1", "workstation": "WS1"},
         {"event_id": 4625, "timestamp": base - timedelta(minutes=5), "user": "ALICE", "logon_type": 2, "logon_id": "", "workstation": "WS1"},
+        {"event_id": 4778, "timestamp": base + timedelta(hours=2), "user": "ALICE", "logon_type": 0, "logon_id": "0x2", "workstation": "WS1"},
+        {"event_id": 4779, "timestamp": base + timedelta(hours=3), "user": "ALICE", "logon_type": 0, "logon_id": "0x2", "workstation": "WS1"},
     ]
     
     historical = {"ALICE": {"WS_OLD"}}
@@ -448,6 +455,11 @@ def run_tests(skip_db: bool = False) -> bool:
     report.check_eq("ALICE unique_pc_count", alice.get("unique_pc_count"), 2) # WS1 + WS_OLD
     report.check_eq("ALICE daily_new_pc_count", alice.get("daily_new_pc_count"), 1) # WS1 is new
     report.check_eq("ALICE daily_failed_login_ratio", alice.get("daily_failed_login_ratio"), round(1/3, 4))
+    report.check_eq("ALICE screen_unlock_count", alice.get("screen_unlock_count"), 1)
+    report.check_eq("ALICE screen_lock_count", alice.get("screen_lock_count"), 1)
+    report.check_eq("ALICE interactive_duration_seconds", alice.get("interactive_duration_seconds"), 600.0) # 15 min - 5 min = 10 mins = 600s
+    report.check_eq("ALICE rdp_reconnect_count", alice.get("rdp_reconnect_count"), 1)
+    report.check_eq("ALICE rdp_disconnect_count", alice.get("rdp_disconnect_count"), 1)
     
     report.summary()
     return report.all_passed
@@ -469,26 +481,10 @@ def main():
     target_date = datetime.strptime(args.date, "%Y-%m-%d") if args.date else datetime.now()
     
     day_start, day_end = _build_time_filter(target_date)
-    events = query_security_events([4624, 4634, 4647, 4625], day_start, day_end)
+    events = query_security_events([4624, 4634, 4647, 4625, 4800, 4801, 4778, 4779], day_start, day_end)
     
-    conn = None
-    historical = {}
-    if _HAS_PSYCOPG2 and not args.dry_run:
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur: cur.execute(CREATE_TABLE_SQL)
-            conn.commit()
-            historical = fetch_historical_pcs(conn)
-        except Exception as e: logger.error("DB Error: %s", e)
+    features = derive_features(events, target_date)
 
-    features = derive_features(events, target_date, historical)
-
-    if args.dry_run:
-        print(json.dumps(features, indent=2, default=str))
-    elif conn and features:
-        count = insert_features(conn, features)
-        logger.info("Pipeline complete — %d rows upserted.", count)
-        conn.close()
-
+    print(json.dumps(features, indent=2, default=str))
 if __name__ == "__main__":
     main()

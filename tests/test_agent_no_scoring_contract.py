@@ -145,3 +145,20 @@ def test_short_term_edr_outputs_raw_auth_rate_features_not_burst_scores(monkeypa
     assert "edr_auth_event_count_lookback" in features
     assert "edr_auth_events_per_minute_window" in features
     assert "edr_failed_auth_events_per_minute_window" in features
+
+
+def test_collector_runtime_output_uses_only_collection_vocabulary():
+    import json
+
+    from agent.collectors.base import BaseCollector
+
+    class SampleCollector(BaseCollector):
+        name = "sample"
+
+        def collect(self, context=None):
+            return self.success({"file_access_count": 1, "watchlisted_url_count": 0}, quality="heuristic")
+
+    rendered = json.dumps(SampleCollector(hostname="host-a").collect().as_dict()).lower()
+
+    for word in ("risk", "alert", "severity", "threat", "malicious", "suspicious", "detection", "score"):
+        assert word not in rendered

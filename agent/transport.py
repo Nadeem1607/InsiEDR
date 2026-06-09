@@ -18,6 +18,11 @@ class TransportResult:
     status_code: int | None = None
     error: str | None = None
     queued: bool = False
+    dead_lettered: bool = False
+    response_json: dict[str, Any] | None = None
+
+
+PERMANENT_HTTP_FAILURES = {400, 401, 403}
 
 
 class TelemetryTransport:
@@ -36,7 +41,7 @@ class TelemetryTransport:
         self.timeout_seconds = timeout_seconds
         self.verify_tls = verify_tls
         self.agent_token = agent_token
-        self.session = session or requests.Session()
+        self.session = session if session is not None else requests.Session()
 
     def _headers(self, headers: Mapping[str, str] | None = None) -> dict[str, str]:
         final = {
@@ -64,9 +69,16 @@ class TelemetryTransport:
                 timeout=self.timeout_seconds,
                 verify=self.verify_tls,
             )
+            
+            resp_json = None
+            try:
+                resp_json = response.json()
+            except Exception:
+                pass
+
             if 200 <= response.status_code < 300:
-                return TransportResult(ok=True, status_code=response.status_code)
-            return TransportResult(ok=False, status_code=response.status_code, error=f"server returned HTTP {response.status_code}")
+                return TransportResult(ok=True, status_code=response.status_code, response_json=resp_json)
+            return TransportResult(ok=False, status_code=response.status_code, error=f"server returned HTTP {response.status_code}", response_json=resp_json)
         except requests.RequestException as exc:
             return TransportResult(ok=False, error=exc.__class__.__name__)
 
@@ -74,13 +86,22 @@ class TelemetryTransport:
         result = self.send_encrypted(envelope, headers)
         if result.ok:
             return result
+        if result.status_code in PERMANENT_HTTP_FAILURES:
+            self.queue.enqueue_dead_letter(
+                envelope,
+                self._queue_headers(headers),
+                reason=f"permanent_http_{result.status_code}",
+            )
+            log.warning("telemetry send failed permanently; encrypted payload moved to dead_letter (%s)", result.status_code)
+            result.dead_lettered = True
+            return result
         self.queue.enqueue(envelope, self._queue_headers(headers))
         log.warning("telemetry send failed; encrypted payload queued (%s)", result.error or result.status_code)
         result.queued = True
         return result
 
     def retry_queued(self, *, limit: int | None = None) -> dict[str, int]:
-        attempted = sent = retained = 0
+        attempted = sent = retained = dead_lettered = 0
         for item in self.queue.iter_items(limit=limit):
             attempted += 1
             envelope = item.body["envelope"]
@@ -90,7 +111,12 @@ class TelemetryTransport:
                 self.queue.delete(item)
                 sent += 1
                 continue
+            if result.status_code in PERMANENT_HTTP_FAILURES:
+                self.queue.dead_letter(item, reason=f"permanent_http_{result.status_code}")
+                dead_lettered += 1
+                log.warning("queued payload retry failed permanently; moved queue file %s to dead_letter", item.path.name)
+                continue
             retained += 1
             log.warning("queued payload retry failed; retaining queue file %s", item.path.name)
             break
-        return {"attempted": attempted, "sent": sent, "retained": retained}
+        return {"attempted": attempted, "sent": sent, "retained": retained, "dead_lettered": dead_lettered}

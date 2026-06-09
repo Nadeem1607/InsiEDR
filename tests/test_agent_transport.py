@@ -80,8 +80,13 @@ def test_http_4xx_5xx_queue_fallback(tmp_path):
         result = transport.send_or_queue({"scheme": "aes-256-gcm", "nonce": "n", "ciphertext": "c"}, {})
 
         assert not result.ok
-        assert result.queued
-        assert queue.count() == 1
+        if status_code == 400:
+            assert result.dead_lettered
+            assert queue.count() == 0
+            assert queue.dead_letter_count() == 1
+        else:
+            assert result.queued
+            assert queue.count() == 1
 
 
 def test_timeout_queues_payload(tmp_path):
@@ -106,6 +111,6 @@ def test_retry_replays_once_and_deletes_success(tmp_path):
 
     summary = transport.retry_queued()
 
-    assert summary == {"attempted": 1, "sent": 1, "retained": 0}
+    assert summary == {"attempted": 1, "sent": 1, "retained": 0, "dead_lettered": 0}
     assert len(session.calls) == 1
     assert queue.count() == 0

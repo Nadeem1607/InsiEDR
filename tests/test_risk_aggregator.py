@@ -10,4 +10,4 @@ def test_risk_meta_features_are_deferred_to_server(tmp_path):
     result = ComputedMetaFeatureCollector(path=spec, hostname="host-a").collect().as_dict()
 
     assert result["payload"]["status"] == "server_deferred"
-    assert "daily_risk_rolling_mean_7d" in result["payload"]["server_deferred_features"]
+    assert "daily_files_to_removable_7d_sum" in result["payload"]["server_deferred_features"]

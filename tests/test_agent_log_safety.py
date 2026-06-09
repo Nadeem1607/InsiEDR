@@ -62,6 +62,24 @@ def test_config_safe_summary_excludes_key_and_token(tmp_path):
     assert "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk" not in rendered
 
 
+def test_config_safe_summary_redacts_server_url_credentials_and_secret_query_values(tmp_path):
+    config = AgentConfig(
+        server_url="https://user:pass@server.example/api/logs?token=abc&tenant=ok&api_key=def",
+        aes_key=b"k" * 32,
+        agent_id="agent-secret",
+        hostname="host-secret",
+        username="user-secret",
+        queue_dir=tmp_path,
+    )
+
+    rendered = repr(config.safe_summary())
+
+    assert "user:pass" not in rendered
+    assert "abc" not in rendered
+    assert "def" not in rendered
+    assert "tenant=ok" in rendered
+
+
 def test_transport_failure_logs_do_not_include_authorization_header(tmp_path, caplog):
     queue = LocalEncryptedQueue(tmp_path)
     transport = TelemetryTransport(
