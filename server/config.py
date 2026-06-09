@@ -61,7 +61,7 @@ class ServerConfig:
 
     @property
     def model_inference_dir(self) -> str:
-        return os.environ.get("INSIEDR_MODEL_INFERENCE_DIR", "model-inference")
+        return os.environ.get("INSIEDR_MODEL_INFERENCE_DIR", ".")  # src/ and models/ live at repo root
 
     @property
     def fernet_key_env(self) -> str | None:
