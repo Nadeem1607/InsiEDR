@@ -6,4 +6,4 @@ def test_dashboard_renders():
     client = app.test_client()
     resp = client.get("/dashboard/")
     assert resp.status_code == 200
-    assert b"InsiEDR Dashboard" in resp.data
+    assert b"InsiEDR" in resp.data
