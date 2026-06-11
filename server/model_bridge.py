@@ -263,6 +263,15 @@ class ModelBridge:
                 # Fallback if scenario prediction fails
                 pass
 
+            # 3. Evaluate Rule-Based Heuristics
+            try:
+                import heuristics.detector as h_detector
+                heuristic_result = h_detector.detect_insider_threat(ordered_features)
+                current_result["heuristics"] = heuristic_result
+            except Exception as e:
+                # Fallback if heuristics module fails or is not available
+                pass
+
             self._apply_rolling_risk_features(storage, payload, ordered_features)
             self._persist_current_result(storage, payload, current_result, missing)
 
