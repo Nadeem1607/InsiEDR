@@ -1,23 +1,39 @@
 import pandas as pd
+import os
 
+TEST_INSIDERS_FILE = (
+    "test_insiders.csv"
+)
 
-INSIDERS_FILE = r"data/CERT/r4.2/answers/answers/insiders.csv"
+TOP_USERS_FILE = (
+    "top_users.csv"
+)
 
+def load_test_insiders():
 
-def load_true_insiders():
+    if not os.path.exists(
+        TEST_INSIDERS_FILE
+    ):
 
-    insiders = pd.read_csv(
-        INSIDERS_FILE
+        raise FileNotFoundError(
+
+            f"{TEST_INSIDERS_FILE} not found.\n"
+
+            "Run run_experiment.py first "
+            "to generate test_insiders.csv"
+
+        )
+
+    df = pd.read_csv(
+        TEST_INSIDERS_FILE
     )
 
-    r42 = insiders[
-        insiders["dataset"] == 4.2
-    ]
-
     return set(
-        r42["user"]
+
+        df["user"]
+
         .astype(str)
-        .unique()
+
     )
 
 
@@ -39,6 +55,13 @@ def evaluate_method(
     print("=" * 80)
     print(score_column.upper())
     print("=" * 80)
+    print()
+
+    print(
+        "Test Insider Count:",
+        len(insiders)
+    )
+
     print()
 
     print(
@@ -74,13 +97,67 @@ def evaluate_method(
 
         )
 
-        overlap = sorted(
+        detected = (
 
-            insiders.intersection(
-                top_users
-            )
+            insiders
+            &
+            top_users
 
         )
+
+        false_positives = (
+
+            top_users
+            -
+            insiders
+
+        )
+
+        recall = (
+
+            len(detected)
+
+            /
+
+            len(insiders)
+
+        )
+
+        precision = (
+
+            len(detected)
+
+            /
+
+            len(top_users)
+
+        )
+
+        if (
+            precision + recall
+        ) > 0:
+
+            f1 = (
+
+                2
+
+                * precision
+
+                * recall
+
+                /
+
+                (
+                    precision
+                    +
+                    recall
+                )
+
+            )
+
+        else:
+
+            f1 = 0
 
         print(
             f"Top-{k}"
@@ -88,30 +165,90 @@ def evaluate_method(
 
         print(
             "Detected:",
-            len(overlap)
+            len(detected)
         )
 
         print(
             "Recall:",
-            len(overlap)
-            / len(insiders)
+            round(
+                recall,
+                4
+            )
         )
 
         print(
-            overlap
+            "Precision:",
+            round(
+                precision,
+                4
+            )
         )
 
+        print(
+            "F1:",
+            round(
+                f1,
+                4
+            )
+        )
+
+        print()
+
+        print(
+            "Detected Insiders:"
+        )
+
+        print(
+            sorted(
+                detected
+            )
+        )
+
+        print()
+
+        print(
+            "Missing Insiders:"
+        )
+
+        print(
+
+            sorted(
+
+                insiders
+
+                -
+
+                detected
+
+            )
+
+        )
+
+        print()
+
+        print(
+            "False Positives:"
+        )
+
+        print(
+            sorted(
+                false_positives
+            )
+        )
+
+        print()
+        print("-" * 80)
         print()
 
 
 def main():
 
     insiders = (
-        load_true_insiders()
+        load_test_insiders()
     )
 
     users = pd.read_csv(
-        "top_users.csv"
+        TOP_USERS_FILE
     )
 
     candidate_scores = [
@@ -129,6 +266,22 @@ def main():
     print()
     print("=" * 80)
     print(
+        "TEST INSIDERS"
+    )
+    print("=" * 80)
+
+    print(
+        len(insiders)
+    )
+
+    print(
+        sorted(insiders)
+    )
+
+    print()
+
+    print("=" * 80)
+    print(
         "AVAILABLE METHODS"
     )
     print("=" * 80)
@@ -142,7 +295,9 @@ def main():
         evaluate_method(
 
             users,
+
             insiders,
+
             score_column
 
         )

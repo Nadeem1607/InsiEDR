@@ -16,6 +16,9 @@ REQUIRED_MODEL_ARTIFACTS = (
     "ridge_models.pkl",
     "rvfl_metadata.json",
     "feature_columns.json",
+    "feature_columns_IF.json",
+    "scenario_xgb.pkl",
+    "scenario_xgb_features.json",
 )
 
 REQUIRED_MODEL_DEPENDENCIES = (
@@ -23,6 +26,7 @@ REQUIRED_MODEL_DEPENDENCIES = (
     "numpy",
     "sklearn",
     "torch",
+    "xgboost",
 )
 
 FEATURE_ALIASES = {
@@ -84,11 +88,14 @@ class ModelBridge:
 
     def feature_columns(self) -> list[str]:
         if self._feature_columns is None:
-            path = self.models_dir / "feature_columns.json"
-            if path.exists():
-                self._feature_columns = json.loads(path.read_text(encoding="utf-8"))
-            else:
-                self._feature_columns = []
+            if_path = self.models_dir / "feature_columns_IF.json"
+            xgb_path = self.models_dir / "scenario_xgb_features.json"
+            features = set()
+            if if_path.exists():
+                features.update(json.loads(if_path.read_text(encoding="utf-8")))
+            if xgb_path.exists():
+                features.update(json.loads(xgb_path.read_text(encoding="utf-8")))
+            self._feature_columns = sorted(list(features))
         return self._feature_columns
 
     def _load_inference_module(self):
@@ -238,13 +245,32 @@ class ModelBridge:
 
         try:
             inference = self._load_inference_module()
+            
+            # 1. Evaluate Current Risk (Isolation Forest)
             current_result = inference.predict_current_risk({"features": ordered_features})
             self._apply_current_risk_features(ordered_features, current_result)
+            
+            # 2. Evaluate Scenario Probability (XGBoost)
+            try:
+                scenario_result = inference.predict_scenario({"features": ordered_features})
+                # Add the output probabilities into our features dictionary so they get persisted 
+                # and are available in the daily sequence for RVFL
+                for key, val in scenario_result.items():
+                    if key.startswith("rf_") and key.endswith("_prob"):
+                        ordered_features[key] = float(val)
+                # Overwrite current result risk_level if necessary, or just store it
+            except Exception as e:
+                # Fallback if scenario prediction fails
+                pass
+
             self._apply_rolling_risk_features(storage, payload, ordered_features)
             self._persist_current_result(storage, payload, current_result, missing)
 
             sequence = self._adapt_sequence(self._daily_sequence(storage, payload, ordered_features))
-            if len(sequence) >= 16:
+            
+            # The RVFL model metadata specifies the sequence length (default 7 days of history + current day = 8)
+            seq_len = getattr(inference.get_engine(), 'rvfl_metadata', {}).get("sequence_length", 7)
+            if len(sequence) >= seq_len + 1:
                 behavioral_result = inference.predict_behavioral_risk(
                     {
                         "payload_id": payload["payload_id"],
@@ -256,6 +282,8 @@ class ModelBridge:
                 self._persist_behavioral_result(storage, payload, behavioral_result)
             return {"status": "processed", "current": current_result, "missing_features": missing}
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             result = self._skipped(payload, "inference_error", f"Model inference failed: {type(exc).__name__}", missing)
             self._persist_model_output(storage, result)
             return result

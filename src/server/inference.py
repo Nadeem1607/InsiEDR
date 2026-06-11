@@ -19,6 +19,12 @@ class InferenceEngine:
     scores them, and fuses the scores.
     """
     def __init__(self, models_dir=None):
+        from src.run.config import get_all_configs
+
+        config = get_all_configs()[0]
+
+        self.if_weight = config["IF_weight"]
+        self.xgb_weight = config["XGB_weight"]
         self.rvfl_orchestrator = None
         if models_dir is None:
             models_dir = os.path.abspath(
@@ -30,6 +36,8 @@ class InferenceEngine:
         self.ridge_models = None
         self.rvfl_metadata = None
         self.feature_columns = None
+        self.scenario_model = None
+        self.scenario_features = None   
         self._load_models()
 
     def _load_models(self):
@@ -37,7 +45,7 @@ class InferenceEngine:
         scaler_path = os.path.join(self.models_dir, "feature_scaler.pkl")
         ridge_path = os.path.join(self.models_dir, "ridge_models.pkl")
         metadata_path = os.path.join(self.models_dir, "rvfl_metadata.json")
-        columns_path = os.path.join(self.models_dir, "feature_columns.json")
+        columns_path = os.path.join(self.models_dir, "feature_columns_IF.json")
 
         # Load domain isolation forest
         if not os.path.exists(if_path):
@@ -87,27 +95,39 @@ class InferenceEngine:
             raise FileNotFoundError(f"Persisted feature columns not found at {columns_path}")
         with open(columns_path, "r") as f:
             self.feature_columns = json.load(f)
+        xgb_model_path = os.path.join(
+            self.models_dir,
+            "scenario_xgb.pkl"
+        )
 
-    def validate_features(self, daily_sequence):
-        expected_features = set(self.feature_columns)
-        for i, day in enumerate(daily_sequence):
-            features_dict = day.get("features", {})
-            provided_features = set(features_dict.keys())
+        xgb_features_path = os.path.join(
+            self.models_dir,
+            "scenario_xgb_features.json"
+        )
+        if not os.path.exists(xgb_model_path):
+            raise FileNotFoundError(
+                f"Scenario XGB model not found at {xgb_model_path}"
+            )
 
-            # Missing features: error
-            missing = expected_features - provided_features
-            if missing:
-                raise ValueError(
-                    f"Missing required features on day index {i}: {sorted(list(missing))}"
-                )
+        self.scenario_model = joblib.load(
+            xgb_model_path
+        )
 
-            # Unexpected features: warning
-            unexpected = provided_features - expected_features
-            if unexpected:
-                warnings.warn(
-                    f"Unexpected features provided on day index {i}: {sorted(list(unexpected))}",
-                    UserWarning
-                )
+        if not os.path.exists(
+            xgb_features_path
+        ):
+            raise FileNotFoundError(
+                f"Scenario feature list not found at {xgb_features_path}"
+            )
+
+        with open(
+            xgb_features_path,
+            "r"
+        ) as f:
+
+            self.scenario_features = json.load(
+                f
+            )
 
     def predict_current_risk(
         self,
@@ -121,10 +141,32 @@ class InferenceEngine:
 
         features = payload["features"]
 
-        missing = set(
-            self.feature_columns
-        ) - set(
-            features.keys()
+        required_features = (
+
+            set(LOGON_FEATURES)
+
+            |
+
+            set(FILE_FEATURES)
+
+            |
+
+            set(DEVICE_FEATURES)
+
+            |
+
+            set(HTTP_FEATURES)
+
+        )
+
+        missing = (
+
+            required_features
+
+            -
+
+            set(features.keys())
+
         )
 
         if missing:
@@ -135,25 +177,25 @@ class InferenceEngine:
         logon_cols = [
             c
             for c in LOGON_FEATURES
-            if c in self.feature_columns
+            if c in features
         ]
 
         file_cols = [
             c
             for c in FILE_FEATURES
-            if c in self.feature_columns
+            if c in features
         ]
 
         device_cols = [
             c
             for c in DEVICE_FEATURES
-            if c in self.feature_columns
+            if c in features
         ]
 
         http_cols = [
             c
             for c in HTTP_FEATURES
-            if c in self.feature_columns
+            if c in features
         ]
 
         logon_X = np.array(
@@ -257,8 +299,8 @@ class InferenceEngine:
 
         }
     def predict_behavioral_risk(
-        self,
-        payload
+            self,
+            payload
     ):
 
         required_keys = [
@@ -296,11 +338,8 @@ class InferenceEngine:
                 f"{seq_len + 1} days of history. "
 
                 f"Provided: {len(daily_sequence)}"
-            )
 
-        self.validate_features(
-            daily_sequence
-        )
+            )
 
         target_sequence = (
 
@@ -310,56 +349,57 @@ class InferenceEngine:
 
         )
 
-        feature_rows = []
+        rvfl_values = []
 
         for day in target_sequence:
 
-            features_dict = day[
-                "features"
-            ]
+            overall_risk = float(
+                day["overall_risk"]
+            )
 
-            row = [
+            scenario_risk = max(
 
-                features_dict[col]
+                float(
+                    day["rf_s1_prob"]
+                ),
 
-                for col in self.feature_columns
+                float(
+                    day["rf_s2_prob"]
+                ),
 
-            ]
+                float(
+                    day["rf_s3_prob"]
+                )
 
-            feature_rows.append(
-                row
+            )
+
+            rvfl_risk = (
+
+                self.if_weight * overall_risk
+
+                +
+
+                self.xgb_weight * scenario_risk
+
+            )
+
+            rvfl_values.append(
+                [rvfl_risk]
             )
 
         features_array = np.array(
 
-            feature_rows,
+            rvfl_values,
 
             dtype=np.float32
 
         )
 
-        features_array = np.nan_to_num(
-
-            features_array,
-
-            nan=0.0
-
-        )
-
-        scaled_features = (
-
-            self.feature_scaler
-            .transform(
-                features_array
-            )
-
-        )
-
-        X_seq = scaled_features[
+        X_seq = features_array[
             :seq_len
         ]
 
-        y_actual = scaled_features[
+        y_actual = features_array[
             seq_len:
         ]
 
@@ -369,9 +409,7 @@ class InferenceEngine:
 
             dtype=torch.float32
 
-        ).unsqueeze(
-            0
-        )
+        ).unsqueeze(0)
 
         y_pred = (
 
@@ -392,8 +430,13 @@ class InferenceEngine:
 
                 np.square(
 
-                    y_actual -
-                    y_pred
+                    y_actual.reshape(-1)
+
+                    -
+
+                    np.asarray(
+                        y_pred
+                    ).reshape(-1)
 
                 )
 
@@ -403,94 +446,81 @@ class InferenceEngine:
 
         if rvfl_error >= 0.05:
 
-            behavioral_risk = (
-                "HIGH"
-            )
+            behavioral_risk = "HIGH"
 
             recommended_action = (
-
                 "Escalate for analyst review."
-
             )
 
         elif rvfl_error >= 0.02:
 
-            behavioral_risk = (
-                "MEDIUM"
-            )
+            behavioral_risk = "MEDIUM"
 
             recommended_action = (
-
                 "Monitor user behavior closely."
-
             )
 
         else:
 
-            behavioral_risk = (
-                "LOW"
-            )
+            behavioral_risk = "LOW"
 
             recommended_action = (
-
                 "No action required."
-
             )
 
-        predicted_scenario = (
+        latest_day = target_sequence[-1]
 
-            predict_scenario(
-                payload
-            )
+        latest_scenario = max(
+
+            [
+                ("s1", float(latest_day["rf_s1_prob"])),
+                ("s2", float(latest_day["rf_s2_prob"])),
+                ("s3", float(latest_day["rf_s3_prob"]))
+            ],
+
+            key=lambda x: x[1]
 
         )
 
         return {
 
             "payload_id":
-
-                payload[
-                    "payload_id"
-                ],
+                payload["payload_id"],
 
             "username":
-
-                payload[
-                    "username"
-                ],
+                payload["username"],
 
             "hostname":
-
-                payload[
-                    "hostname"
-                ],
+                payload["hostname"],
 
             "rvfl_error":
-
                 round(
-
                     rvfl_error,
-
                     6
-
                 ),
 
             "behavioral_risk":
-
                 behavioral_risk,
 
-            "predicted_scenario":
+            "predicted_scenario": {
 
-                predicted_scenario,
+                "scenario":
+                    latest_scenario[0],
+
+                "confidence":
+                    round(
+                        latest_scenario[1],
+                        6
+                    )
+
+            },
 
             "sequence_length_received":
-
                 len(
                     daily_sequence
                 ),
 
             "sequence_length_expected":
-
                 seq_len,
 
             "model_versions": {
@@ -499,13 +529,124 @@ class InferenceEngine:
                     "v1",
 
                 "scenario_model":
-                    "none"
+                    "external"
 
             },
 
             "recommended_action":
-
                 recommended_action
+
+        }
+    def predict_scenario(
+            self,
+            payload
+    ):
+
+        if "features" not in payload:
+
+            raise ValueError(
+                "Missing 'features'"
+            )
+
+        features = payload[
+            "features"
+        ]
+
+        missing = (
+
+            set(
+                self.scenario_features
+            )
+
+            -
+
+            set(
+                features.keys()
+            )
+
+        )
+
+        if missing:
+
+            raise ValueError(
+
+                f"Missing scenario features: "
+                f"{sorted(list(missing))}"
+
+            )
+
+        X = np.array([
+
+            [
+
+                features[col]
+
+                for col in
+                self.scenario_features
+
+            ]
+
+        ])
+
+        probabilities = (
+
+            self.scenario_model
+            .predict_proba(X)[0]
+
+        )
+
+        class_labels = (
+            self.scenario_model.classes_
+        )
+
+        class_map = {
+
+            0: "normal",
+            1: "s1",
+            2: "s2",
+            3: "s3"
+
+        }
+
+        prob_dict = {}
+
+        for idx, cls in enumerate(
+            class_labels
+        ):
+
+            prob_dict[
+                f"rf_{class_map[cls]}_prob"
+            ] = float(
+                probabilities[idx]
+            )
+
+        predicted_class = (
+
+            class_labels[
+                np.argmax(
+                    probabilities
+                )
+            ]
+
+        )
+
+        return {
+
+            "scenario":
+
+                class_map[
+                    predicted_class
+                ],
+
+            "confidence":
+
+                float(
+                    np.max(
+                        probabilities
+                    )
+                ),
+
+            **prob_dict
 
         }
 _engine = None    
@@ -537,12 +678,14 @@ def predict_behavioral_risk(
             payload
         )
     )
-def predict_scenario(payload: dict) -> dict:
-    """
-    Checks the user daily sequence for scenario-specific threat models.
-    Supports future expansion (e.g. loading scenario-specific Isolation Forests).
-    """
-    return {
-        "scenario": "unknown",
-        "confidence": 0.0
-    }
+
+def predict_scenario(
+    payload: dict
+) -> dict:
+
+    return (
+        get_engine()
+        .predict_scenario(
+            payload
+        )
+    )

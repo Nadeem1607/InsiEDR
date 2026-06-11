@@ -40,9 +40,8 @@ def train_model(
 
         ridge = Ridge(
             alpha=config["ridge_alpha"],
-            solver="cholesky"
+            solver="lsqr"
         )
-
         ridge.fit(
             D,
             y_train
