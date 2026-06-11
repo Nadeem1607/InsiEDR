@@ -3,7 +3,7 @@
 import os
 from collections import defaultdict
 from urllib.parse import urlparse
-
+import json
 import pandas as pd
 from scipy.stats import entropy
 
@@ -304,8 +304,6 @@ def extract_http_features(
     result = result.fillna(0)
 
     try:
-        import os
-        import json
         current_dir = os.path.dirname(os.path.abspath(__file__))
         json_path = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "..", "models", "feature_columns_IF.json"))
         with open(json_path, "r") as f:
