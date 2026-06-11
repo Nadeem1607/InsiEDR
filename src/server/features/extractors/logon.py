@@ -245,6 +245,20 @@ def extract_logon_features(logon_df):
 
     result = result.fillna(0)
 
+    try:
+        import os
+        import json
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        json_path = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "..", "models", "feature_columns_IF.json"))
+        with open(json_path, "r") as f:
+            allowed_features = set(json.load(f))
+        keep_cols = ["user", "date"] + [col for col in result.columns if col in allowed_features]
+        seen = set()
+        keep_cols = [x for x in keep_cols if not (x in seen or seen.add(x))]
+        result = result[keep_cols]
+    except Exception as e:
+        print(f"Warning: Could not filter logon features using feature_columns_IF.json: {e}")
+
     print(
         "Logon feature extraction complete"
     )

@@ -12,11 +12,21 @@ from sklearn.preprocessing import MinMaxScaler
 def load_feature_dataset(path):
 
     df = pd.read_csv(path)
+    print("\nACTUALLY LOADED:")
+    print(path) 
 
+    print("\nRAW COLUMN COUNT:")
+    print(len(df.columns))
+
+    print("\nRAW LAST 10 COLUMNS:")
+    print(df.columns.tolist()[-10:])
     df["date"] = pd.to_datetime(
         df["date"]
     )
-
+    if "label" in df.columns:
+        df = df.drop(
+            columns=["label"]
+        )
     feature_columns = [
 
         c
@@ -32,29 +42,14 @@ def load_feature_dataset(path):
 
     ]
 
-    scaler = MinMaxScaler()
 
-    scaler = MinMaxScaler()
-
-    df[feature_columns] = scaler.fit_transform(
-
-        df[feature_columns]
-
+    print(
+        f"Feature Count: {len(feature_columns)}"
     )
 
-    os.makedirs(
-        "models",
-        exist_ok=True
+    print(
+        feature_columns[-10:]
     )
-
-    joblib.dump(
-
-        scaler,
-
-        "models/feature_scaler.pkl"
-
-    )
-
     print(
         "Saved: models/feature_scaler.pkl"
     )

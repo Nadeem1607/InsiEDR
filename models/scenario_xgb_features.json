@@ -1,4 +1,4 @@
-LOGON_FEATURES = [
+[
     "logon_count",
     "logoff_count",
     "unique_pc_count",
@@ -9,25 +9,23 @@ LOGON_FEATURES = [
     "last_logoff_time",
     "weekend_logon",
     "daily_pc_access_entropy",
-]
-
-FILE_FEATURES = [
-    "file_access_count",
-    "daily_unique_filename_count",
-    "daily_new_filename_count",
-    "daily_file_access_entropy",
-]
-
-DEVICE_FEATURES = [
     "usb_connect_count",
     "usb_disconnect_count",
     "after_hours_usb_usage",
     "daily_device_connect_count",
     "daily_device_usage_flag",
     "first_usb_usage_time",
-]
-
-HTTP_FEATURES = [
+    "last_usb_usage_time",
+    "file_access_count",
+    "daily_unique_filename_count",
+    "daily_new_filename_count",
+    "daily_file_access_entropy",
+    "after_hours_file_access",
+    "weekend_file_access",
+    "daily_repeat_file_access_count",
+    "daily_repeat_file_ratio",
+    "first_file_access_time",
+    "last_file_access_time",
     "http_count",
     "daily_http_request_count",
     "unique_url_count",
@@ -39,9 +37,6 @@ HTTP_FEATURES = [
     "daily_new_domain_count",
     "daily_domain_access_entropy",
     "daily_external_domain_ratio",
-]
-
-META_FEATURES = [
     "logon_risk",
     "file_risk",
     "device_risk",
@@ -49,22 +44,5 @@ META_FEATURES = [
     "overall_risk",
     "daily_risk_delta",
     "daily_risk_rolling_mean_7d",
-    "daily_risk_rolling_std_7d",
+    "daily_risk_rolling_std_7d"
 ]
-
-FEATURE_ORDER = (
-    LOGON_FEATURES
-    + FILE_FEATURES
-    + DEVICE_FEATURES
-    + HTTP_FEATURES
-    + META_FEATURES
-)
-
-IF_GROUPS = {
-    "logon": LOGON_FEATURES,
-    "file": FILE_FEATURES,
-    "device": DEVICE_FEATURES,
-    "http": HTTP_FEATURES,
-}
-
-NUM_FEATURES = len(FEATURE_ORDER)

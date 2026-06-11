@@ -1,37 +1,47 @@
-# Stateless Inference Engine for Insider Threat Detection
+# Stateless Insider Threat Detection Inference Engine
 
 ## Overview
 
-This module implements a stateless inference engine for insider threat detection using two independent detection systems:
+This module implements a stateless insider threat detection platform composed of three specialized machine learning models:
 
-1. **Domain Isolation Forests** — Detect current behavioral anomalies using domain-specific anomaly detectors.
-2. **RedRVFL Behavioral Model** — Detect long-term behavioral deviations using sequence-based prediction.
+1. **Domain Isolation Forests** — Current anomaly detection
+2. **XGBoost Scenario Classifier** — Insider scenario classification
+3. **RedRVFL Behavioral Model** — Long-term behavioral drift detection
 
-The system is designed to operate without maintaining server-side state. All historical context required for behavioral analysis is supplied by the caller.
+Each model serves a distinct purpose within the detection pipeline.
+
+The system maintains no server-side state. All historical context required for temporal analysis must be supplied by the caller.
 
 ---
 
 # Architecture
 
-The inference engine exposes two independent APIs:
-
 ```text
-predict_current_risk()
+Raw Daily Features
         │
-        └── Isolation Forest
-
-predict_behavioral_risk()
+        ▼
+Isolation Forest
         │
-        └── RedRVFL
-
-predict_scenario()
-        │
-        └── Future Extension
+        ├── logon_risk
+        ├── file_risk
+        ├── device_risk
+        ├── http_risk
+        └── overall_risk
+                │
+                ▼
+        XGBoost Scenario Model
+                │
+                ├── rf_normal_prob
+                ├── rf_s1_prob
+                ├── rf_s2_prob
+                └── rf_s3_prob
+                        │
+                        ▼
+                RedRVFL
+                        │
+                        ▼
+                Behavioral Risk
 ```
-
-No risk fusion is performed.
-
-Current behavioral anomalies and long-term behavioral deviations are evaluated independently.
 
 ---
 
@@ -39,50 +49,157 @@ Current behavioral anomalies and long-term behavioral deviations are evaluated i
 
 ## 1. Domain Isolation Forest
 
-The Isolation Forest system evaluates behavior across four domains:
+The Isolation Forest system evaluates current behavioral anomalies across four domains:
 
 * Logon Activity
 * File Activity
 * Device Activity
 * HTTP Activity
 
-Each domain is scored independently.
+Each domain is evaluated independently using a dedicated Isolation Forest model.
 
-The final anomaly score is the average of the four domain scores.
+The final anomaly score is computed as:
 
-This detector is intended for:
+```text
+overall_risk
 
-* Near real-time monitoring
-* Immediate anomaly detection
+=
+
+mean(
+    logon_risk,
+    file_risk,
+    device_risk,
+    http_risk
+)
+```
+
+### Purpose
+
+* Near real-time anomaly detection
 * Endpoint risk assessment
+* Current behavioral monitoring
 
 ---
 
-## 2. RedRVFL Behavioral Model
+## 2. XGBoost Scenario Classifier
 
-The RedRVFL model evaluates behavioral drift across time.
+The XGBoost model performs supervised insider scenario classification.
 
-It receives a sequence of daily feature vectors and predicts the next day's expected behavior.
+Supported classes:
 
-Behavioral deviation is calculated as:
+```text
+normal
+
+s1
+
+s2
+
+s3
+```
+
+The classifier produces class probabilities:
+
+```text
+rf_normal_prob
+
+rf_s1_prob
+
+rf_s2_prob
+
+rf_s3_prob
+```
+
+### Purpose
+
+* Insider scenario classification
+* Scenario-specific risk assessment
+* Analyst triage support
+
+### Required Inputs
+
+The model expects:
+
+```text
+Raw behavioral features
+
++
+
+logon_risk
+file_risk
+device_risk
+http_risk
+overall_risk
+
++
+
+daily_risk_delta
+daily_risk_rolling_mean_7d
+daily_risk_rolling_std_7d
+```
+
+Historical risk statistics must be supplied by the caller.
+
+The inference service does not maintain historical state.
+
+---
+
+## 3. RedRVFL Behavioral Drift Model
+
+The RedRVFL model evaluates long-term behavioral deviations.
+
+The model operates on a single fused risk signal derived from the outputs of the Isolation Forest and XGBoost models.
+
+Scenario risk is calculated as:
+
+```text
+scenario_risk
+
+=
+
+max(
+    rf_s1_prob,
+    rf_s2_prob,
+    rf_s3_prob
+)
+```
+
+The final behavioral signal is:
+
+```text
+rvfl_risk
+
+=
+
+0.3 × overall_risk
+
++
+
+0.7 × scenario_risk
+```
+
+The model predicts the next day's expected risk value.
+
+Behavioral deviation is measured using:
 
 ```text
 Mean Squared Error (MSE)
 
 between
 
-Actual Features
+Actual rvfl_risk
+
 and
-Predicted Features
+
+Predicted rvfl_risk
 ```
 
-Higher error indicates greater deviation from historical behavior.
+Higher error indicates stronger behavioral drift.
 
-This detector is intended for:
+### Purpose
 
-* Daily risk evaluation
 * Long-term behavioral monitoring
-* Insider threat detection based on temporal behavior changes
+* Behavioral change detection
+* Insider threat identification
 
 ---
 
@@ -95,16 +212,20 @@ models/
 
 domain_isolation_forest.pkl
 
-feature_scaler.pkl
+scenario_xgb.pkl
+
+scenario_xgb_features.json
 
 ridge_models.pkl
 
 rvfl_metadata.json
 
+feature_columns_IF.json
+
 feature_columns.json
 ```
 
-These artifacts must exist before the engine can initialize.
+All artifacts must exist before initialization.
 
 ---
 
@@ -126,20 +247,18 @@ from src.server.inference import (
 {
   "features": {
 
-    "logon_count": 12,
-    "logoff_count": 12,
+    "... all required IF features ..."
 
-    "... all required features ..."
   }
 }
 ```
 
 ### Requirements
 
-The feature dictionary must contain every feature listed in:
+The feature dictionary must contain all features listed in:
 
 ```text
-models/feature_columns.json
+models/feature_columns_IF.json
 ```
 
 Missing features raise:
@@ -162,7 +281,6 @@ payload = {
     "features": {
 
         "logon_count": 12,
-
         "logoff_count": 12
 
     }
@@ -182,19 +300,19 @@ result = predict_current_risk(
 {
   "detector": "isolation_forest",
 
-  "overall_score": 0.82,
+  "overall_score": 0.61,
 
-  "risk_level": "HIGH",
+  "risk_level": "MEDIUM",
 
   "domain_scores": {
 
-      "logon": 0.91,
+      "logon": 0.72,
 
-      "file": 0.73,
+      "file": 0.58,
 
-      "device": 0.62,
+      "device": 0.49,
 
-      "http": 0.88
+      "http": 0.67
 
   }
 }
@@ -217,7 +335,105 @@ otherwise
 
 ---
 
-# API 2 — Behavioral Risk Assessment
+# API 2 — Scenario Classification
+
+## Import
+
+```python
+from src.server.inference import (
+    predict_scenario
+)
+```
+
+---
+
+## Input Format
+
+```json
+{
+  "features": {
+
+      "... raw features ...",
+
+      "logon_risk": 0.71,
+
+      "file_risk": 0.52,
+
+      "device_risk": 0.44,
+
+      "http_risk": 0.61,
+
+      "overall_risk": 0.57,
+
+      "daily_risk_delta": 0.08,
+
+      "daily_risk_rolling_mean_7d": 0.49,
+
+      "daily_risk_rolling_std_7d": 0.12
+
+  }
+}
+```
+
+### Requirements
+
+The feature dictionary must contain all features listed in:
+
+```text
+models/scenario_xgb_features.json
+```
+
+Missing features raise:
+
+```python
+ValueError
+```
+
+---
+
+## Example
+
+```python
+from src.server.inference import (
+    predict_scenario
+)
+
+payload = {
+
+    "features": {
+        ...
+    }
+
+}
+
+result = predict_scenario(
+    payload
+)
+```
+
+---
+
+## Response Format
+
+```json
+{
+  "scenario": "s1",
+
+  "confidence": 0.91,
+
+  "rf_normal_prob": 0.03,
+
+  "rf_s1_prob": 0.91,
+
+  "rf_s2_prob": 0.04,
+
+  "rf_s3_prob": 0.02
+}
+```
+
+---
+
+# API 3 — Behavioral Risk Assessment
 
 ## Import
 
@@ -225,6 +441,30 @@ otherwise
 from src.server.inference import (
     predict_behavioral_risk
 )
+```
+
+---
+
+## Sequence Requirements
+
+Current model configuration:
+
+```text
+sequence_length = 7
+```
+
+Required sequence:
+
+```text
+7 historical observations
+
++
+
+1 target observation
+
+=
+
+8 total observations
 ```
 
 ---
@@ -242,71 +482,37 @@ from src.server.inference import (
   "daily_sequence": [
 
       {
-          "date": "2026-01-01",
+          "overall_risk": 0.42,
 
-          "features": {
+          "rf_s1_prob": 0.02,
 
-              "... all required features ..."
+          "rf_s2_prob": 0.01,
 
-          }
+          "rf_s3_prob": 0.88
       }
 
   ]
 }
 ```
 
----
+### Requirements
 
-## Sequence Requirements
-
-The behavioral model requires:
+Each daily record must contain:
 
 ```text
-sequence_length + 1
-```
+overall_risk
 
-daily feature vectors.
+rf_s1_prob
 
-Current model configuration:
+rf_s2_prob
 
-```text
-15 history days
-
-+
-
-1 target day
-
-=
-
-16 total days
-```
-
-Minimum required sequence length:
-
-```text
-16 days
-```
-
----
-
-## Feature Requirements
-
-Each daily feature vector must contain all features defined in:
-
-```text
-models/feature_columns.json
+rf_s3_prob
 ```
 
 Missing features raise:
 
 ```python
 ValueError
-```
-
-Unexpected features generate:
-
-```python
-UserWarning
 ```
 
 ---
@@ -349,32 +555,32 @@ result = predict_behavioral_risk(
 
   "hostname": "PC001",
 
-  "rvfl_error": 0.034,
+  "rvfl_error": 0.067,
 
-  "behavioral_risk": "MEDIUM",
+  "behavioral_risk": "HIGH",
 
   "predicted_scenario": {
 
-      "scenario": "unknown",
+      "scenario": "s3",
 
-      "confidence": 0.0
+      "confidence": 0.88
 
   },
 
-  "sequence_length_received": 16,
+  "sequence_length_received": 8,
 
-  "sequence_length_expected": 16,
+  "sequence_length_expected": 7,
 
   "model_versions": {
 
       "rvfl_model": "v1",
 
-      "scenario_model": "none"
+      "scenario_model": "external"
 
   },
 
   "recommended_action":
-      "Monitor user behavior closely."
+      "Escalate for analyst review."
 }
 ```
 
@@ -395,51 +601,46 @@ otherwise
 
 ---
 
-# Scenario Prediction
-
-The current implementation contains a placeholder scenario prediction interface.
-
-Current response:
-
-```json
-{
-  "scenario": "unknown",
-  "confidence": 0.0
-}
-```
-
-Future versions will support supervised scenario classification for:
-
-```text
-Normal User
-
-Scenario 1
-
-Scenario 2
-
-Scenario 3
-```
-
-along with confidence scores.
-
----
-
 # Stateless Deployment Design
 
-The server maintains no user history.
+The inference engine maintains no user history.
 
-All behavioral context is supplied by the caller.
+The client system is responsible for:
 
-Recommended architecture:
+```text
+Daily feature collection
+
+Historical storage
+
+Risk trend computation
+
+Rolling window maintenance
+
+Sequence generation
+```
+
+The inference service is responsible for:
+
+```text
+Current anomaly scoring
+
+Scenario classification
+
+Behavioral drift detection
+```
+
+Recommended deployment architecture:
 
 ```text
 Endpoint Agent
     │
     ├── Collect daily features
     │
-    ├── Maintain rolling history
+    ├── Maintain historical state
     │
-    └── Submit daily sequence
+    ├── Compute risk trend features
+    │
+    └── Submit inference requests
             │
             ▼
 
@@ -447,12 +648,10 @@ Stateless Inference Engine
             │
             ├── Current Risk
             │
-            ├── Behavioral Risk
+            ├── Scenario Classification
             │
-            └── Scenario Prediction
+            └── Behavioral Risk
 ```
-
-This design allows horizontal scaling without centralized session storage.
 
 ---
 
@@ -465,10 +664,10 @@ All models are loaded once during startup.
 Inference requests:
 
 * Do not modify model state
-* Do not update weights
+* Do not update model weights
 * Do not persist user information
 
-The engine is suitable for:
+Suitable for:
 
 * FastAPI
 * Flask
@@ -478,17 +677,33 @@ The engine is suitable for:
 
 ---
 
+# Current Production Status
+
+Implemented and validated:
+
+```text
+✓ Domain Isolation Forest
+
+✓ XGBoost Scenario Classification
+
+✓ RedRVFL Behavioral Drift Detection
+
+✓ End-to-End Integration
+
+✓ Stateless Deployment
+```
+
+---
+
 # Future Roadmap
 
-Planned extensions include:
+Planned enhancements:
 
-* Scenario Classification Models
-* Endpoint-side 5-minute Window Analysis
-* Streaming Isolation Forest Evaluation
-* Top-K Insider Tracking
-* Risk Trend Visualization
 * Analyst Investigation Reports
-* Confidence-Calibrated Scenario Prediction
-
-```
-```
+* Risk Visualization Dashboards
+* Confidence Calibration
+* Streaming Evaluation Pipelines
+* Top-K Insider Tracking
+* Temporal Scenario Analytics
+* Explainability Enhancements
+* Multi-Tenant Deployment Support

@@ -1,9 +1,10 @@
 import time
 import numpy as np
 import pandas as pd
-
+from sklearn.preprocessing import MinMaxScaler
 from src.run.config import get_all_configs
-
+import os
+import joblib
 from src.run.data_loader import (
     load_feature_dataset,
     build_sequences,
@@ -22,7 +23,7 @@ from src.run.evaluator import (
 )
 
 
-DATASET_PATH = "if_enriched_features.csv"
+DATASET_PATH = "scenario_training_dataset_with_xgb.csv"
 
 
 def build_user_rankings(
@@ -197,10 +198,79 @@ if __name__ == "__main__":
         )
 
         print(
-            "Shape:",
+            "Original Shape:",
             df.shape
         )
 
+        print(
+            "\nReducing feature space for RVFL..."
+        )
+
+        #
+        # Create a single scenario score
+        #
+
+        df["scenario_risk"] = (
+
+            df[
+                [
+                    "rf_s1_prob",
+                    "rf_s2_prob",
+                    "rf_s3_prob"
+                ]
+            ]
+
+            .max(axis=1)
+
+        )
+
+        #
+        # Create final RVFL signal
+        #
+
+        df["rvfl_risk"] = (
+
+            0.3 * df["overall_risk"]
+
+            +
+
+            0.7 * df["scenario_risk"]
+
+        )
+
+        #
+        # Keep only the single signal
+        #
+
+        df = df[
+            [
+                "user",
+                "date",
+                "rvfl_risk"
+            ]
+        ]
+
+        feature_columns = [
+            "rvfl_risk"
+        ]
+
+        print(
+            "Using fused RVFL signal"
+        )
+
+        print(
+            "Feature Count:",
+            len(feature_columns)
+        )
+
+        print(
+            feature_columns
+        )
+
+        print(
+            "Shape:",
+            df.shape
+        )
         print(
             "\nBuilding sequences..."
         )
@@ -246,7 +316,217 @@ if __name__ == "__main__":
             y,
             metadata
         )
+        print(
+            "\nScaling train/val/test..."
+        )
 
+        #
+        # Feature scaler
+        #
+        feature_scaler = MinMaxScaler()
+
+        feature_scaler.fit(
+
+            X_train.reshape(
+                -1,
+                X_train.shape[2]
+            )
+
+        )
+
+        X_train = (
+
+            feature_scaler.transform(
+
+                X_train.reshape(
+                    -1,
+                    X_train.shape[2]
+                )
+
+            )
+
+            .reshape(
+                X_train.shape
+            )
+
+        )
+
+        X_val = (
+
+            feature_scaler.transform(
+
+                X_val.reshape(
+                    -1,
+                    X_val.shape[2]
+                )
+
+            )
+
+            .reshape(
+                X_val.shape
+            )
+
+        )
+
+        X_test = (
+
+            feature_scaler.transform(
+
+                X_test.reshape(
+                    -1,
+                    X_test.shape[2]
+                )
+
+            )
+
+            .reshape(
+                X_test.shape
+            )
+
+        )
+
+        #
+        # Target scaler
+        #
+        target_scaler = MinMaxScaler()
+
+        target_scaler.fit(
+            y_train
+        )
+
+        y_train = (
+            target_scaler.transform(
+                y_train
+            )
+        )
+
+        y_val = (
+            target_scaler.transform(
+                y_val
+            )
+        )
+
+        y_test = (
+            target_scaler.transform(
+                y_test
+            )
+        )
+
+        os.makedirs(
+            "models",
+            exist_ok=True
+        )
+
+        joblib.dump(
+
+            feature_scaler,
+
+            "models/feature_scaler.pkl"
+
+        )
+
+        joblib.dump(
+
+            target_scaler,
+
+            "models/target_scaler.pkl"
+
+        )
+
+        print(
+            "Saved feature_scaler.pkl"
+        )
+
+        print(
+            "Saved target_scaler.pkl"
+        )
+        print(
+            "\nTrain Min:",
+            X_train.min()
+        )
+
+        print(
+            "Train Max:",
+            X_train.max()
+        )
+
+        print(
+            "Test Min:",
+            X_test.min()
+        )
+
+        print(
+            "Test Max:",
+            X_test.max()
+        )
+        train_users = {
+            m["user"]
+            for m in metadata_train
+        }
+
+        test_users = {
+            m["user"]
+            for m in metadata_test
+        }
+
+        overlap = train_users & test_users
+
+        print("\nTRAIN USERS:", len(train_users))
+        print("TEST USERS:", len(test_users))
+        print("OVERLAP:", len(overlap))
+
+        if len(overlap) > 0:
+
+            print("\nFIRST 20 OVERLAPPING USERS:")
+            print(sorted(list(overlap))[:20])
+        test_users = {
+
+            m["user"]
+
+            for m in metadata_test
+
+        }
+
+        print(
+            "\nUsers in test set:",
+            len(test_users)
+        )
+
+        import pandas as pd
+
+        insiders = pd.read_csv(
+            "data/CERT/r4.2/answers/answers/insiders.csv"
+        )
+
+        insider_users = set(
+
+            insiders[
+                insiders["dataset"] == 4.2
+            ]["user"]
+
+        )
+
+        test_insiders = (
+
+            insider_users
+            &
+            test_users
+
+        )
+
+        print(
+            "Total insiders:",
+            len(insider_users)
+        )
+
+        print(
+            "Insiders in test:",
+            len(test_insiders)
+        )
+
+        print(
+            sorted(test_insiders)
+        )
         print(
             "\nTraining samples:",
             len(X_train)
@@ -341,7 +621,8 @@ if __name__ == "__main__":
         print(
             "\nComputing prediction error..."
         )
-
+        print("y_test shape:", y_test.shape)
+        print("predictions shape:", predictions.shape)
         errors = (
             compute_prediction_error(
                 y_test,
@@ -453,7 +734,14 @@ if __name__ == "__main__":
         print(
             "prediction_errors.csv"
         )
-
+    pd.DataFrame(
+    {
+        "user": sorted(test_insiders)
+    }
+    ).to_csv(
+        "test_insiders.csv",
+        index=False
+    )
     print(
         "\nExperiment Complete."
     )

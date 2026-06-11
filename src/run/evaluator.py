@@ -7,6 +7,15 @@ def compute_prediction_error(
         y_pred
 ):
 
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    if y_true.ndim == 1:
+        y_true = y_true.reshape(-1, 1)
+
+    if y_pred.ndim == 1:
+        y_pred = y_pred.reshape(-1, 1)
+
     return np.mean(
 
         np.square(
@@ -14,6 +23,7 @@ def compute_prediction_error(
         ),
 
         axis=1
+
     )
 
 

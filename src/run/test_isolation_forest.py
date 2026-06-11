@@ -6,7 +6,7 @@ from src.server.anomaly.domain_models import (
     DomainIsolationForest
 )
 
-from src.server.anomaly.risk_fusion import (
+from src.server.anomaly.rolling_features import (
     add_risk_trend_features,
     build_daily_risk_dataframe
 )
@@ -20,7 +20,8 @@ from src.server.features.feature_schema import (
 
 
 CERT_PATH = r"data/CERT/r4.2/r4.2"
-
+import os
+import joblib
 
 def existing_columns(
         feature_df,
@@ -138,8 +139,7 @@ def main():
         device_X,
         http_X
     )
-    import os
-    import joblib
+    
 
     os.makedirs(
         "models",
@@ -220,9 +220,6 @@ def main():
             risk_df,
             on=["user", "date"]
         )
-    )
-    from src.server.anomaly.risk_fusion import (
-        add_risk_trend_features
     )
 
     merged_df = add_risk_trend_features(
