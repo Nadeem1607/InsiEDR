@@ -1,47 +1,79 @@
-# InsiEDR Master Deployment & Architecture Guide
+# InsiEDR: Insider Threat Endpoint Detection & Response
 
-Welcome to the comprehensive guide for **InsiEDR**. This document covers everything you need to know about the architecture, how to properly set up your environment (Conda or standard Python), how to configure PostgreSQL, and how to deploy the agents across multiple computers.
+Welcome to **InsiEDR**, a sophisticated Endpoint Detection and Response (EDR) system engineered to detect, classify, and mitigate insider threats across a fleet of Windows endpoints. 
 
----
-
-## 1. System Architecture Overview
-
-InsiEDR operates on a traditional **Client-Server architecture** with heavy emphasis on zero-trust telemetry and machine learning.
-
-1. **The Agents (Clients)**: Installed on remote Windows endpoints. They use specialized collectors to read system state (e.g., File, Logon, HTTP, Device behavior), encrypt the payload using AES-GCM, and transmit it to the server.
-2. **The Backend (Server)**: A Flask-based application that receives and decrypts agent telemetry.
-3. **The ML Pipeline**: Embedded directly into the backend via `ModelBridge`. It utilizes a sequential RedRVFL network for behavioral scoring and XGBoost for deterministic scenario classification. It also passes data through a deterministic rule-based Heuristics engine.
-4. **The Database (PostgreSQL)**: The central nervous system where all decrypted telemetry and resulting risk event scores are persisted.
+InsiEDR leverages a multi-layered detection pipeline combining traditional deterministic heuristics with advanced Machine Learning—specifically, Isolation Forests, Random Vector Functional Link (RedRVFL) neural networks for temporal sequential modeling, and XGBoost for explicit threat scenario classification.
 
 ---
 
-## 2. Python Environment Setup
+## 1. System Architecture
 
-You can run InsiEDR using either Anaconda (`conda`) or standard Python Virtual Environments (`venv`). Choose **one** of the methods below for both your server and your agent machines.
+InsiEDR operates on a zero-trust **Client-Server architecture** designed to securely handle and analyze endpoint telemetry at scale.
 
-### Option A: Using Conda (Recommended)
-Conda handles binary dependencies (like PostgreSQL drivers) very gracefully on Windows.
+1. **The Agents (Endpoints)**: Lightweight Python agents deployed on target Windows machines. They continuously monitor system states using multiple specialized collectors:
+   - *File Collector*: Tracks bulk file access, modifications, and honeytoken/decoy file triggers.
+   - *Logon Collector*: Monitors logon events, tracking distinct machines accessed, login frequencies, and potential lateral movement.
+   - *Device Collector*: Detects anomalous USB drive insertions and hardware changes.
+   - *HTTP Collector*: Monitors network traffic volume, specifically looking for abnormal upload spikes indicating exfiltration.
+   All collected telemetry is encrypted locally via AES-GCM before being securely transmitted to the server.
 
-1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or Anaconda.
-2. Open **Anaconda Prompt** (or initialize Conda for PowerShell via `conda init powershell`).
-3. Create and activate a dedicated environment:
-   ```powershell
-   conda create -n edr python=3.11 -y
-   conda activate edr
-   ```
+2. **The Backend Server**: A high-performance Flask application running behind a Waitress WSGI server. It receives, authenticates, and decrypts telemetry payloads.
 
-### Option B: Using Standard Python (venv)
-If you prefer not to use Conda, ensure you have Python 3.10+ installed.
+3. **The Intelligence Pipeline (`ModelBridge`)**: The core analytical engine. Decrypted telemetry is immediately passed into a highly integrated, multi-stage detection pipeline (detailed below).
 
-1. Open PowerShell and navigate to your project directory.
-2. Create and activate the virtual environment:
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
+4. **The PostgreSQL Database**: The centralized nervous system. All decrypted telemetry, parsed features, and resulting threat scores are safely persisted here for dashboard rendering and historical analysis.
 
-### Installing Dependencies
-Regardless of which method you chose above, install the required packages:
+5. **The Analyst Dashboard**: A modern, dark-themed, responsive web interface that visualizes risk across the fleet, displaying temporal risk charts, radar breakdowns of domain risk (Logon, File, Device, HTTP), and live threat feeds.
+
+---
+
+## 2. The Multi-Layered Intelligence Pipeline
+
+When telemetry arrives at the server, it passes through three distinct analytical engines to determine the risk level and threat scenario.
+
+### 2.1 The Anomaly Detector (Isolation Forest)
+The first layer is an **Isolation Forest** model (`iforest_model.pkl`). It is an unsupervised anomaly detection algorithm that treats normal behavior as the baseline. 
+- **Purpose**: To catch "unknown unknowns" or zero-day anomalous behaviors that don't fit explicit rules.
+- **Output**: Generates a base `overall_score` (0 to 100) and localized `domain_scores` pinpointing exactly which domain (File, Logon, Device, HTTP) is experiencing the anomaly.
+
+### 2.2 The Scenario Classifier (XGBoost)
+Telemetry features are then fed into a supervised **XGBoost Classifier** (`scenario_xgb.pkl`).
+- **Purpose**: To explicitly classify the exact *type* of threat occurring. 
+- **Output**: The model outputs a probability distribution across known threat scenarios (e.g., `s1`, `s2`, `s3`, `normal`). 
+
+### 2.3 The Temporal Sequence Modeler (RedRVFL)
+The outputs of the XGBoost model (the scenario probabilities) are injected back into the user's historical sequence of behaviors. This sequence is then fed into a **Random Vector Functional Link (RedRVFL) Network**.
+- **Purpose**: Traditional models look at single points in time. Insider threats (like data hoarding followed by exfiltration) play out over time. RedRVFL is designed to understand the *sequential temporal risk*.
+- **Output**: Produces a highly accurate, time-aware `behavioral_risk` score (0-100) and identifies the dominant `predicted_scenario` with a confidence percentage.
+
+### 2.4 The Deterministic Rules Engine (Heuristics)
+Machine learning is powerful, but deterministic rules are required for absolute certainty on known bad behaviors. The Heuristics engine runs in parallel:
+- **Logon Spikes & Lateral Movement**: Flags when a user logs into an abnormal number of distinct machines in a short window.
+- **Bulk File Collection**: Triggers when massive numbers of files are accessed or modified.
+- **Decoy Triggers**: Instant **CRITICAL** alerts if a user touches a known honeytoken or decoy file.
+- **Data Exfiltration**: Triggers on abnormal HTTP upload volumes.
+- **Output**: Deterministic, human-readable scenario tags (e.g., "🚨 Multi-PC Lateral Movement", "⚠️ Abnormal USB Activity") that override or supplement ML findings.
+
+---
+
+## 3. Production Deployment Guide
+
+### 3.1 Python Environment Setup
+You can run InsiEDR using either Anaconda (`conda`) or standard Python Virtual Environments (`venv`). 
+
+**Using Conda (Recommended)**
+```powershell
+conda create -n edr python=3.11 -y
+conda activate edr
+```
+
+**Using Standard Python (venv)**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+**Installing Dependencies**
 ```powershell
 pip install -r requirements.txt
 pip install psycopg2-binary waitress
@@ -49,108 +81,68 @@ pip install psycopg2-binary waitress
 
 ---
 
-## 3. PostgreSQL Database Setup
-
-For a production deployment, the server must be backed by PostgreSQL.
-
-### 3.1 Installation
-1. Download and install **PostgreSQL for Windows** from the [official website](https://www.postgresql.org/download/windows/).
-2. During installation, you will be prompted to set a password for the default `postgres` superuser. Remember this password!
-3. The installer also includes **pgAdmin 4**, a graphical interface for managing your database.
-
-### 3.2 Creating the Database
-1. Open **pgAdmin 4** from your Start Menu.
-2. Connect to your local server using the `postgres` password you just created.
-3. Right-click on **Databases** -> **Create** -> **Database...**
-4. Name the database `insiedr` and click **Save**.
-5. (Optional) Create a dedicated user for the app instead of using the `postgres` superuser.
+### 3.2 PostgreSQL Database Setup
+1. Install **PostgreSQL for Windows**.
+2. Open **pgAdmin 4** (installed with PostgreSQL).
+3. Connect using your superuser password.
+4. Create a new empty database named `insiedr`.
 
 Your database connection string will look like this: 
 `postgresql://<USERNAME>:<PASSWORD>@localhost:5432/insiedr`
 
 ---
 
-## 4. Backend Server Setup
-
-The backend server must be running before agents can connect.
-
-### 4.1 Server Configuration
-Open PowerShell on the server machine, activate your Python environment (`conda activate edr`), and set the following environment variables:
+### 3.3 Backend Server Setup
+On the server machine, activate your Python environment (`conda activate edr`), and configure the necessary environment variables:
 
 ```powershell
 # 1. Database Connection String
-$env:INSIEDR_DATABASE_DSN = "postgresql://postgres:YOUR_PASSWORD@localhost:5432/insiedr"
+$env:INSIEDR_DATABASE_DSN = "postgresql://username:password@localhost:5432/insiedr"
 
-# 2. Secret Key for the Flask web application
+# 2. Flask Secret Key
 $env:INSIEDR_FLASK_SECRET_KEY = "your-secure-random-string"
 
-# 3. Generate a 32-byte AES GCM key for telemetry encryption.
-# (To generate a key: python -c "import os, base64; print(base64.b64encode(os.urandom(32)).decode())")
+# 3. 32-byte AES GCM key for telemetry encryption.
+# (Generate via: python -c "import os, base64; print(base64.b64encode(os.urandom(32)).decode())")
 $env:INSIEDR_AES_KEY = "YOUR_BASE64_ENCODED_AES_KEY_HERE"
 
-# 4. Set Python path so the app can find the modules
+# 4. Set Python path
 $env:PYTHONPATH = "C:\Path\To\InsiEDR"
 ```
 
-### 4.2 Running the Server
-Launch the server using Waitress, a production-ready WSGI server for Windows:
-
+**Running the Server:**
+Launch the server using Waitress. The very first time it starts, it will automatically run SQL schema migrations to create all required tables.
 ```powershell
 waitress-serve --port=5000 --call server.app:create_app
 ```
 
-> [!NOTE]
-> **Database Migrations:** The very first time the server starts, it will detect that the `insiedr` database is empty. It will automatically run the SQL schema migrations to create all required tables. You do not need to create tables manually.
-
 ---
 
-## 5. Remote Agent Setup
-
+### 3.4 Remote Agent Setup
 Agents must be installed on your remote endpoints. **The Agent does NOT need PostgreSQL.** It only needs Python and the exact same AES key as the server.
 
-### 5.1 Agent Configuration
-On the **remote computer**, activate the Python environment (`conda activate edr`) and configure the variables required to authenticate to the server:
-
+On the **remote computer**, activate your Python environment and set:
 ```powershell
-# 1. Point to your server's IP address and the `/api/logs` ingestion endpoint
 $env:INSIEDR_AGENT_SERVER = "http://YOUR_SERVER_IP:5000/api/logs"
-
-# 2. Set the EXACT same AES key used by the backend server
 $env:INSIEDR_AES_KEY = "YOUR_BASE64_ENCODED_AES_KEY_HERE"
-
-# 3. If using HTTP instead of HTTPS, explicitly allow insecure connections
 $env:INSIEDR_ALLOW_INSECURE_HTTP = "1"
-
-# 4. Set agent mode to production
 $env:INSIEDR_AGENT_MODE = "production"
-
-# 5. Set Python path
 $env:PYTHONPATH = "C:\Path\To\InsiEDR"
 ```
 
-### 5.2 Running the Agent
-You can run the agent manually in the foreground to verify it works:
-```powershell
-python -m agent.main
-```
-
-### 5.3 Installing as a Background Service
-To ensure the agent runs silently in the background and starts automatically upon system reboot, use the provided installer script. Run this from an **Administrator PowerShell prompt** on the remote machine:
-
+**Installing as a Background Service:**
+To ensure the agent runs silently and starts on reboot, run the installer script from an **Administrator PowerShell prompt**:
 ```powershell
 cd C:\Path\To\InsiEDR
 .\scripts\windows\install_agent_task.bat
 ```
 
+*(To test manually in the foreground before installing: `python -m agent.main`)*
+
 ---
 
-## 6. The Analyst Dashboard
-
-Once your server is running and remote agents begin transmitting encrypted payloads, you can monitor the entire fleet.
-
-Open a web browser on your server and navigate to:
+### 3.5 The Analyst Dashboard
+With the server and agents running, open a web browser to:
 `http://localhost:5000/dashboard/`
 
-*(Or replace `localhost` with the server's IP address if accessing from another machine).*
-
-The dashboard updates automatically as telemetry arrives. It provides real-time risk scores, domain breakdowns, and precise heuristic scenario alerts for all monitored endpoints.
+The dashboard will securely poll the PostgreSQL backend, rendering the real-time outputs of the Isolation Forest, RedRVFL, XGBoost, and Heuristic engines, giving you complete visibility over your fleet.
