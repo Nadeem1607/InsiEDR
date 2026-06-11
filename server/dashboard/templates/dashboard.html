@@ -503,12 +503,24 @@
         }
         el.innerHTML = events.map(ev => {
           const cls = riskClass(ev.risk_level);
+          
+          let summaryText = safe(ev.summary, 'Risk event detected');
+          try {
+             let signals = ev.correlated_signals_json;
+             if (typeof signals === 'string') signals = JSON.parse(signals);
+             if (signals?.heuristics?.detections?.length > 0) {
+                 summaryText = '🚨 ' + signals.heuristics.detections[0].scenario;
+             } else if (signals?.predicted_scenario?.scenario && signals.predicted_scenario.scenario !== 'normal') {
+                 summaryText = '⚠️ ' + signals.predicted_scenario.scenario;
+             }
+          } catch(e) {}
+
           return `
             <div class="threat-item ${cls}" onclick="drillDown('${(ev.username||'').replace(/'/g,"\\'")}')">
               <span class="threat-severity ${cls}">${safe(ev.risk_level, 'N/A')}</span>
               <div class="threat-body">
                 <div class="threat-user">${safe(ev.username)}</div>
-                <div class="threat-summary">${safe(ev.summary, 'Risk event detected')}</div>
+                <div class="threat-summary">${safe(summaryText)}</div>
                 <div class="threat-time">${ago(ev.created_at)} · Score: ${parseFloat(ev.risk_score||0).toFixed(1)}</div>
               </div>
             </div>`;
@@ -686,9 +698,35 @@
           const risk = userRisk[user];
           const score = risk ? parseFloat(risk.risk_score || 0) : 0;
           const level = risk ? (risk.risk_level || 'LOW') : 'NONE';
-          const scenarios = risk?.summary || '';
+          
+          let scenarioTags = [];
+          if (risk && risk.correlated_signals_json) {
+            try {
+               let signals = risk.correlated_signals_json;
+               if (typeof signals === 'string') signals = JSON.parse(signals);
+               
+               // 1. Get Heuristics scenarios
+               if (signals?.heuristics?.detections) {
+                 signals.heuristics.detections.forEach(d => {
+                   if (d.scenario && !scenarioTags.includes(d.scenario)) {
+                     scenarioTags.push(d.scenario);
+                   }
+                 });
+               }
+               // 2. Add XGBoost scenario if not normal
+               if (signals?.predicted_scenario?.scenario && signals.predicted_scenario.scenario !== 'normal') {
+                  if (!scenarioTags.includes(signals.predicted_scenario.scenario)) {
+                     scenarioTags.push(signals.predicted_scenario.scenario);
+                  }
+               }
+            } catch(e) {}
+          }
+          if (scenarioTags.length === 0 && score > 0) {
+             scenarioTags.push('Anomaly Detected');
+          }
+
           const isOnline = agent.status === 'active';
-          return { user, hostname: agent.hostname || '—', score, level, scenarios, lastSeen: agent.last_seen_at, isOnline };
+          return { user, hostname: agent.hostname || '—', score, level, scenarios: scenarioTags, lastSeen: agent.last_seen_at, isOnline };
         });
 
         // Deduplicate by user
@@ -707,7 +745,7 @@
         tbody.innerHTML = unique.map(r => {
           const cls = riskClass(r.level);
           const barW = Math.min(r.score, 100);
-          const tags = r.scenarios ? r.scenarios.split(/[,;]/).slice(0,3).map(s => `<span class="scenario-tag">${s.trim()}</span>`).join('') : '<span class="scenario-tag" style="opacity:0.4">—</span>';
+          const tags = r.scenarios && r.scenarios.length ? r.scenarios.slice(0,3).map(s => `<span class="scenario-tag">${safe(s)}</span>`).join('') : '<span class="scenario-tag" style="opacity:0.4">—</span>';
           return `
             <tr onclick="drillDown('${r.user.replace(/'/g,"\\'")}')">
               <td><span class="status-dot ${r.isOnline ? 'online' : 'offline'}"></span></td>
@@ -808,34 +846,68 @@
               </div>`;
           }
 
-          // Model predictions
+          // Model predictions (Updated for RedRVFL architecture)
           if (pred) {
-            ['short_term', 'long_term'].forEach(key => {
-              const p = pred[key];
-              if (!p) return;
-              const score = parseFloat(p.score || 0);
-              const conf = (parseFloat(p.confidence || 0) * 100).toFixed(1);
-              html += `
-                <div class="drill-stat">
-                  <span class="drill-stat-label">${key === 'short_term' ? 'Short-Term' : 'Long-Term'} Score</span>
-                  <span class="drill-stat-value" style="color:${riskColor(score)}">${score.toFixed(2)}</span>
-                </div>
-                <div class="drill-stat">
-                  <span class="drill-stat-label">${key === 'short_term' ? 'ST' : 'LT'} Confidence</span>
-                  <span class="drill-stat-value">${conf}%</span>
-                </div>`;
-            });
+            const bRisk = parseFloat(pred.behavioral_risk || 0);
+            html += `
+              <div class="drill-stat">
+                <span class="drill-stat-label">Behavioral Risk (RVFL)</span>
+                <span class="drill-stat-value" style="color:${riskColor(bRisk)}">${bRisk.toFixed(1)}</span>
+              </div>`;
+            
+            if (pred.predicted_scenario) {
+               html += `
+              <div class="drill-stat">
+                <span class="drill-stat-label">Model Scenario (XGBoost)</span>
+                <span class="drill-stat-value">${safe(pred.predicted_scenario.scenario)} (${(pred.predicted_scenario.confidence * 100).toFixed(1)}%)</span>
+              </div>`;
+            }
+            if (pred.recommended_action) {
+               html += `
+              <div class="drill-stat">
+                <span class="drill-stat-label">Action</span>
+                <span class="drill-stat-value">${safe(pred.recommended_action)}</span>
+              </div>`;
+            }
           }
 
           if (!html) html = '<div class="empty-state"><div class="empty-state-text">No predictions available for this user</div></div>';
+          
+          // Add Heuristics section
+          if (riskScores.length) {
+             const latest = riskScores[riskScores.length - 1];
+             try {
+                let signals = latest.correlated_signals_json;
+                if (typeof signals === 'string') signals = JSON.parse(signals);
+                if (signals && signals.heuristics && signals.heuristics.detections && signals.heuristics.detections.length > 0) {
+                   html += `<h4 style="margin-top:20px;margin-bottom:10px;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Heuristic Detections</h4>`;
+                   signals.heuristics.detections.forEach(det => {
+                      html += `
+                      <div class="drill-stat" style="background:rgba(239, 68, 68, 0.05); border-left: 2px solid ${det.severity === 'CRITICAL' ? '#ef4444' : '#f59e0b'}; margin-bottom: 8px;">
+                        <span class="drill-stat-label" style="color:var(--text-primary)">${safe(det.scenario)}</span>
+                        <span class="drill-stat-value" style="font-size: 11px;">${safe(det.severity)} · Score: ${det.score}</span>
+                      </div>`;
+                   });
+                }
+             } catch(e) {}
+          }
+
           document.getElementById('drillPredictions').innerHTML = html;
 
-          // Feature contributions chart
-          let contributions = {};
-          if (pred?.short_term?.contributions) contributions = pred.short_term.contributions;
-          else if (pred?.long_term?.contributions) contributions = pred.long_term.contributions;
+          // Domain Risk Breakdown chart
+          let domainScores = {};
+          if (riskScores.length) {
+             const latest = riskScores[riskScores.length - 1];
+             try {
+                let signals = latest.correlated_signals_json;
+                if (typeof signals === 'string') signals = JSON.parse(signals);
+                if (signals && signals.domain_scores) {
+                   domainScores = signals.domain_scores;
+                }
+             } catch(e) {}
+          }
 
-          const sorted = Object.entries(contributions)
+          const sorted = Object.entries(domainScores)
             .map(([k, v]) => [k, Math.abs(parseFloat(v) || 0)])
             .sort((a, b) => b[1] - a[1])
             .slice(0, 12);
@@ -850,7 +922,7 @@
                 labels: sorted.map(([k]) => k.replace(/_/g, ' ')),
                 datasets: [{
                   data: sorted.map(([, v]) => v),
-                  backgroundColor: sorted.map(([, v]) => v > 0.5 ? 'rgba(239,68,68,0.6)' : v > 0.2 ? 'rgba(245,158,11,0.6)' : 'rgba(59,130,246,0.5)'),
+                  backgroundColor: sorted.map(([, v]) => v > 50 ? 'rgba(239,68,68,0.6)' : v > 20 ? 'rgba(245,158,11,0.6)' : 'rgba(59,130,246,0.5)'),
                   borderRadius: 4,
                   barThickness: 18,
                 }]
@@ -867,7 +939,7 @@
           } else {
             featureChart = new Chart(ctx, {
               type: 'bar',
-              data: { labels: ['No contribution data'], datasets: [{ data: [0], backgroundColor: 'rgba(100,116,139,0.3)', barThickness: 18 }] },
+              data: { labels: ['No domain data'], datasets: [{ data: [0], backgroundColor: 'rgba(100,116,139,0.3)', barThickness: 18 }] },
               options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { display: false }, ticks: { color: '#64748b', font: { family: 'Inter' } } } } }
             });
           }
