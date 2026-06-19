@@ -118,6 +118,24 @@ def check_security_event_log_access():
             win32evtlog.CloseEventLog(handle)
 
 
+from agent.state import default_state_dir, read_json_file, write_json_file
+
+BOOKMARK_FILE = default_state_dir() / "edr_bookmark.json"
+
+def _load_bookmark() -> int:
+    try:
+        if BOOKMARK_FILE.exists():
+            return int(read_json_file(BOOKMARK_FILE).get("last_record_number", 0))
+    except Exception:
+        pass
+    return 0
+
+def _save_bookmark(record_number: int):
+    try:
+        write_json_file(BOOKMARK_FILE, {"last_record_number": record_number, "updated_at": datetime.now(timezone.utc).isoformat()})
+    except Exception:
+        pass
+
 def collect_auth_events(lookback_seconds):
 
     if not IS_WINDOWS:
@@ -130,10 +148,22 @@ def collect_auth_events(lookback_seconds):
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=lookback_seconds)
     events_out = []
 
+    bookmark = _load_bookmark()
+    max_record = bookmark
+
     handle = None
     try:
         handle = win32evtlog.OpenEventLog(server, log_type)
         flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+        if bookmark == 0:
+            try:
+                latest = win32evtlog.ReadEventLog(handle, flags, 0)
+                if latest:
+                    bookmark = latest[0].RecordNumber
+                    max_record = bookmark
+                    _save_bookmark(bookmark)
+            except Exception:
+                pass
         scanned = 0
 
         while scanned < CONFIG["MAX_EVENTS_SCAN"]:
@@ -143,6 +173,9 @@ def collect_auth_events(lookback_seconds):
 
             for ev in records:
                 scanned += 1
+                if ev.RecordNumber > max_record:
+                    max_record = ev.RecordNumber
+
                 eid = ev.EventID & 0xFFFF  # mask qualifiers
                 if eid not in (4624, 4625):
                     continue
@@ -158,6 +191,12 @@ def collect_auth_events(lookback_seconds):
                     # sequential-backwards read: once older than window we can stop
                     scanned = CONFIG["MAX_EVENTS_SCAN"]
                     break
+                
+                # Apply bookmark filter
+                if ev.RecordNumber <= bookmark:
+                    # Since we read backwards, all subsequent records in the handle are older. Stop entirely.
+                    scanned = CONFIG["MAX_EVENTS_SCAN"]
+                    break
 
                 parsed = _parse_event_strings(ev)
                 parsed.update({
@@ -168,6 +207,7 @@ def collect_auth_events(lookback_seconds):
                     "success": (eid == 4624),
                 })
                 events_out.append(parsed)
+        _save_bookmark(max_record)
 
     except Exception as e:
         if _is_event_log_access_denied(e):

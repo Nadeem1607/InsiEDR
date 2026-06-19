@@ -46,7 +46,7 @@ def test_successful_post_sends_encrypted_payload_with_headers(tmp_path):
     args, kwargs = session.calls[0]
     assert args == ("https://server.example/api/logs",)
     assert kwargs["json"] == envelope
-    assert kwargs["timeout"] == 7
+    assert kwargs["timeout"] == (3.0, 4.0)
     assert kwargs["verify"] is True
     assert kwargs["headers"]["X-CRYPTO-SCHEME"] == "aes-256-gcm"
     assert kwargs["headers"]["X-PAYLOAD-ID"] == "p1"

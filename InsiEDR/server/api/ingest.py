@@ -23,6 +23,7 @@ from shared.protocol import (
 )
 
 from server.config import config
+from server.model_bridge import bridge as model_bridge
 from server.plugin_registry import registry
 
 
@@ -108,17 +109,19 @@ def validate_collector_results(payload: dict[str, Any]) -> None:
             if not isinstance(collector.get(field), str) or not collector.get(field):
                 raise ValidationError(f"collector[{index}].{field} is missing or invalid")
         status = collector.get("status")
-        if status not in ("success", "failed"):
+        if status not in ("success", "failed", "critical"):
             raise ValidationError(f"collector[{index}].status is invalid")
         if status == "success":
             success_count += 1
             if "payload" not in collector:
                 raise ValidationError(f"collector[{index}].payload is required for success")
-        else:
+        elif status == "failed":
             failed_count += 1
             error = collector.get("error")
             if not isinstance(error, dict):
                 raise ValidationError(f"collector[{index}].error is required for failure")
+        elif status == "critical":
+            failed_count += 1  # count as failure for summary
     summary = payload.get("summary")
     if not isinstance(summary, dict):
         raise ValidationError("summary is required")
@@ -156,6 +159,17 @@ def _check_duplicate_policy(storage, envelope: dict[str, Any], payload: dict[str
 
 
 def process_encrypted_request(req) -> tuple[int, dict[str, Any]]:
+    # 1. Transport Security (HTTPS) Enforcement
+    if config.require_https and not req.is_secure:
+        raise IngestError("HTTPS is required for telemetry ingestion", status_code=403)
+        
+    # 2. Bearer Token / Auth Validation
+    expected_token = config.agent_bearer_token
+    if expected_token:
+        auth_header = req.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer ") or auth_header.split(" ", 1)[1] != expected_token:
+            raise IngestError("invalid or missing Bearer token", status_code=403)
+
     # Basic header validation
     if not (req.content_type or "").startswith(INGEST_CONTENT_TYPE):
         raise IngestError("invalid content type")
@@ -232,7 +246,27 @@ def process_encrypted_request(req) -> tuple[int, dict[str, Any]]:
     try:
         _check_duplicate_policy(storage, envelope, payload)
         storage.store_raw_payload(envelope, payload)
+        
+        # Async queue ML modeling to prevent blocking the web server
+        executor = current_app.extensions.get("ml_executor")
+        if executor:
+            app = current_app._get_current_object()
+            
+            def _async_process(app_instance, storage_instance, payload_data):
+                with app_instance.app_context():
+                    try:
+                        model_bridge.process_payload(storage_instance, payload_data)
+                    except Exception as e:
+                        current_app.logger.error(f"Async ML processing failed: {e}")
+
+            executor.submit(_async_process, app, storage, payload)
+        else:
+            # Fallback to sync if executor is missing
+            model_bridge.process_payload(storage, payload)
+            
     except Exception as exc:
+        import traceback
+        traceback.print_exc()
         if isinstance(exc, IngestError):
             raise
         raise StorageUnavailableError("storage persistence failed") from exc

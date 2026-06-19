@@ -1,1 +1,0 @@
-{"envelope": {"scheme": "aes-256-gcm", "nonce": "n", "ciphertext": "c"}, "headers": "bad"}

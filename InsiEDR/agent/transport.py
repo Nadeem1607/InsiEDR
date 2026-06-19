@@ -19,6 +19,7 @@ class TransportResult:
     error: str | None = None
     queued: bool = False
     dead_lettered: bool = False
+    response_json: dict[str, Any] | None = None
 
 
 PERMANENT_HTTP_FAILURES = {400, 401, 403}
@@ -59,23 +60,36 @@ class TelemetryTransport:
             if key.lower() != "authorization"
         }
 
-    def send_encrypted(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None) -> TransportResult:
+    def send_encrypted(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None, timeout_override: float | tuple[float, float] | None = None) -> TransportResult:
+        # Strictly enforce the timeout by splitting it into connect and read phases.
+        # This prevents a 10s float from becoming a 20s total lockup.
+        connect_timeout = 3.0
+        read_timeout = max(1.0, float(self.timeout_seconds) - connect_timeout)
+        effective_timeout = timeout_override if timeout_override is not None else (connect_timeout, read_timeout)
+
         try:
             response = self.session.post(
                 self.server_url,
                 json=dict(envelope),
                 headers=self._headers(headers),
-                timeout=self.timeout_seconds,
+                timeout=effective_timeout,
                 verify=self.verify_tls,
             )
+            
+            resp_json = None
+            try:
+                resp_json = response.json()
+            except Exception:
+                pass
+
             if 200 <= response.status_code < 300:
-                return TransportResult(ok=True, status_code=response.status_code)
-            return TransportResult(ok=False, status_code=response.status_code, error=f"server returned HTTP {response.status_code}")
+                return TransportResult(ok=True, status_code=response.status_code, response_json=resp_json)
+            return TransportResult(ok=False, status_code=response.status_code, error=f"server returned HTTP {response.status_code}", response_json=resp_json)
         except requests.RequestException as exc:
             return TransportResult(ok=False, error=exc.__class__.__name__)
 
-    def send_or_queue(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None) -> TransportResult:
-        result = self.send_encrypted(envelope, headers)
+    def send_or_queue(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None, timeout_override: float | tuple[float, float] | None = None) -> TransportResult:
+        result = self.send_encrypted(envelope, headers, timeout_override=timeout_override)
         if result.ok:
             return result
         if result.status_code in PERMANENT_HTTP_FAILURES:
@@ -84,7 +98,7 @@ class TelemetryTransport:
                 self._queue_headers(headers),
                 reason=f"permanent_http_{result.status_code}",
             )
-            log.warning("telemetry send failed permanently; encrypted payload moved to dead_letter (%s)", result.status_code)
+            log.warning("telemetry send failed permanently; encrypted payload moved to dead_letter (%s): %s", result.status_code, result.response_json)
             result.dead_lettered = True
             return result
         self.queue.enqueue(envelope, self._queue_headers(headers))

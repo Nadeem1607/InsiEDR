@@ -81,7 +81,9 @@ def test_queue_disk_usage_is_bounded(tmp_path):
 
 def test_queue_age_is_bounded(tmp_path):
     queue = LocalEncryptedQueue(tmp_path, max_age_days=1)
-    old = tmp_path / "old.json"
+    old_time = datetime.now(timezone.utc) - timedelta(days=3)
+    prefix = old_time.strftime("%Y%m%dT%H%M%S")
+    old = tmp_path / f"{prefix}-old{queue.suffix}"
     old.write_text(
         json.dumps(
             {

@@ -85,7 +85,6 @@ def test_endpoint_agent_run_once_collects_encrypts_and_queues(tmp_path):
         hostname="host-a",
         username="user-a",
         queue_dir=tmp_path,
-        state_dir=tmp_path / "state",
         enabled_collectors=("computed-meta-features",),
         request_timeout_seconds=1,
     )

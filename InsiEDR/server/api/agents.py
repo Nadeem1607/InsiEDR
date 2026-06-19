@@ -6,6 +6,7 @@ bp = Blueprint("agents", __name__, url_prefix="/api")
 
 
 @bp.route("/agents", methods=["GET"])
+@bp.route("/v1/agents", methods=["GET"])
 def get_agents():
 	storage = current_app.extensions.get("insiedr_storage")
 	if storage is None:

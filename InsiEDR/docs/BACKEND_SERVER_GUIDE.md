@@ -198,7 +198,7 @@ Queue facts from `agent/queue/local_queue.py`:
 - Queue files attempt POSIX mode `0o600`.
 - Queue files contain `created_at`, `payload_id`, sanitized `headers`, and `envelope`.
 - Authorization headers are not stored.
-- Corrupt, expired, oversized, and permanently failed queue files are moved to `dead_letter/`.
+- Corrupt queue files are renamed with `.corrupt`.
 - The agent retries queued payloads before sending new telemetry.
 - Retry limit defaults to `25` via `INSIEDR_QUEUE_RETRY_LIMIT`.
 - Retry stops on the first retained failed item.

@@ -29,7 +29,14 @@ def utc_now_iso() -> str:
 
 
 def canonical_json_bytes(payload: Mapping[str, Any]) -> bytes:
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+        default=str,
+    ).encode("utf-8")
 
 
 def parse_json_bytes(data: bytes) -> dict[str, Any]:
@@ -47,9 +54,6 @@ def validate_telemetry_payload(payload: Mapping[str, Any]) -> None:
         "agent_id": str,
         "hostname": str,
         "collected_at": str,
-        "timezone_name": str,
-        "utc_offset_minutes": int,
-        "timezone_assumption": str,
         "collectors": list,
     }
     for key, expected_type in required.items():

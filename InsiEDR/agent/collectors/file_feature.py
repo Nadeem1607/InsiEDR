@@ -141,11 +141,24 @@ class FileFeatureSampler:
 
             handler = FileEventCollector()
             observer = Observer()
-            scheduled = False
-            for path in CONFIG["watch_paths"]:
+            watch_paths = list(CONFIG["watch_paths"])
+            if psutil is not None:
+                try:
+                    for partition in psutil.disk_partitions(all=False):
+                        if partition.fstype:
+                            rb = os.path.join(partition.mountpoint, "$Recycle.Bin")
+                            if os.path.isdir(rb) and rb not in watch_paths:
+                                watch_paths.append(rb)
+                except Exception as exc:
+                    log.warning("failed to enumerate recycle bins: %s", exc)
+
+            for path in watch_paths:
                 if os.path.isdir(path):
-                    observer.schedule(handler, path, recursive=True)
-                    scheduled = True
+                    try:
+                        observer.schedule(handler, path, recursive=True)
+                        scheduled = True
+                    except (PermissionError, OSError) as exc:
+                        log.debug("skipping restricted path %s: %s", path, exc)
                 else:
                     log.info("file watch path is unavailable: %s", path)
 
@@ -220,6 +233,7 @@ def _empty_features() -> dict[str, Any]:
         "sensitive_file_access": 0,
         "external_drive_file_copy": 0,
         "file_access_after_hours": 0,
+        "weekend_file_access": 0,
         "large_file_transfer_count": 0,
         "unusual_file_access_ratio": 0.0,
         "daily_files_to_removable_count": 0,
@@ -230,6 +244,14 @@ def _empty_features() -> dict[str, Any]:
         "daily_file_open_count": 0,
         "daily_file_write_count": 0,
         "daily_file_delete_count": 0,
+        "first_file_access_time": None,
+        "last_file_access_time": None,
+        "recycle_bin_additions_count": 0,
+        "recycle_bin_emptied_flag": 0,
+        "mass_deletion_burst_count": 0,
+        "staging_archive_count": 0,
+        "total_staged_bytes": 0,
+        "large_staging_burst_flag": 0,
     }
 
 
@@ -243,20 +265,37 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     path_access: Counter[str] = Counter()
     filenames_today: list[str] = []
     seen_writes_by_name: defaultdict[str, int] = defaultdict(int)
+    recycle_bin_deletes = 0
+    archive_sizes: dict[str, int] = {}
+    archive_exts = {".zip", ".rar", ".7z", ".tar", ".gz", ".iso"}
 
+    now_safe = datetime.now(timezone.utc)
     for event in events:
         op = str(event.get("op", ""))
         path = str(event.get("path", ""))
         size = int(event.get("size", 0) or 0)
         ts = event.get("ts")
         if not isinstance(ts, datetime):
-            ts = datetime.now(timezone.utc)
+            ts = now_safe
+            
+        # SAFER SIDE: Ignore events older than 10 minutes (600 seconds)
+        if (now_safe - ts).total_seconds() > 600:
+            continue
 
         lowered = path.lower()
         path_access[path] += 1
         filenames_today.append(path)
 
+        is_recycle_bin = "$recycle.bin" in lowered
+        ext = os.path.splitext(lowered)[1]
+        is_archive = ext in archive_exts
+
+        if is_archive and op in {"CREATE", "WRITE", "MOVE"}:
+            archive_sizes[path] = max(archive_sizes.get(path, 0), size)
+
         if op in {"CREATE", "MOVE"}:
+            if is_recycle_bin:
+                features["recycle_bin_additions_count"] += 1
             features["file_open_count"] += 1
             base = os.path.basename(lowered)
             seen_writes_by_name[base] += 1
@@ -266,6 +305,8 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             features["file_write_count"] += 1
         elif op == "DELETE":
             features["file_delete_count"] += 1
+            if is_recycle_bin:
+                recycle_bin_deletes += 1
 
         if any(pattern in lowered for pattern in CONFIG["sensitive_patterns"]):
             features["sensitive_file_access"] += 1
@@ -275,9 +316,12 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             features["external_drive_file_copy"] += 1
             features["daily_files_to_removable_count"] += 1
 
-        local_time = ts.astimezone().time() if ts.tzinfo is not None else ts.time()
+        local_dt = ts.astimezone() if ts.tzinfo is not None else ts
+        local_time = local_dt.time()
         if not (bh_start <= local_time <= bh_end):
             features["file_access_after_hours"] += 1
+        if local_dt.weekday() >= 5:  # Saturday=5, Sunday=6
+            features["weekend_file_access"] += 1
 
         hashed_path = _hash_value(path)
         if hashed_path not in known_hashes:
@@ -299,6 +343,24 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     features["daily_file_write_count"] = features["file_write_count"]
     features["daily_file_delete_count"] = features["file_delete_count"]
 
+    # Temporal spread of file activity
+    timestamps = [event["ts"] for event in events if isinstance(event.get("ts"), datetime)]
+    if timestamps:
+        features["first_file_access_time"] = min(timestamps).isoformat()
+        features["last_file_access_time"] = max(timestamps).isoformat()
+
+    if recycle_bin_deletes >= 10:
+        features["recycle_bin_emptied_flag"] = 1
+        
+    mass_delete_baseline = 50
+    if features["file_delete_count"] > mass_delete_baseline:
+        features["mass_deletion_burst_count"] = features["file_delete_count"]
+
+    features["staging_archive_count"] += len(archive_sizes)
+    features["total_staged_bytes"] += sum(archive_sizes.values())
+    if any(s > 100 * 1024 * 1024 for s in archive_sizes.values()):
+        features["large_staging_burst_flag"] = 1
+
     _save_state(
         {
             "known_file_hashes": sorted(known_hashes)[-10000:],
@@ -317,6 +379,11 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "daily_removable_media_flag",
         "daily_file_access_entropy",
         "daily_new_filename_count",
+        "recycle_bin_emptied_flag",
+        "mass_deletion_burst_count",
+        "staging_archive_count",
+        "total_staged_bytes",
+        "large_staging_burst_flag",
     ):
         feature_quality[key] = "heuristic"
     features["_collector_quality"] = "heuristic"
@@ -351,7 +418,7 @@ def validate_data(features: dict[str, Any]) -> list[str]:
 
 
 def collect() -> dict[str, Any]:
-    return collect_file_features()
+    return {"status": "success", "payload": collect_file_features()}
 
 
 def collect_features() -> dict[str, Any]:

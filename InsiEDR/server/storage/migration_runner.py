@@ -10,19 +10,34 @@ def split_sql_statements(sql_text: str) -> list[str]:
     current: list[str] = []
     in_single = False
     in_double = False
+    in_dollar = False
 
-    for char in sql_text:
-        if char == "'" and not in_double:
+    i = 0
+    while i < len(sql_text):
+        char = sql_text[i]
+        
+        # Check for $$
+        if char == '$' and i + 1 < len(sql_text) and sql_text[i+1] == '$' and not in_single and not in_double:
+            in_dollar = not in_dollar
+            current.append('$')
+            current.append('$')
+            i += 2
+            continue
+
+        if char == "'" and not in_double and not in_dollar:
             in_single = not in_single
-        elif char == '"' and not in_single:
+        elif char == '"' and not in_single and not in_dollar:
             in_double = not in_double
-        elif char == ";" and not in_single and not in_double:
+        elif char == ";" and not in_single and not in_double and not in_dollar:
             statement = "".join(current).strip()
             if statement:
                 statements.append(statement)
             current = []
+            i += 1
             continue
+            
         current.append(char)
+        i += 1
 
     tail = "".join(current).strip()
     if tail:

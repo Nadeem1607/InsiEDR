@@ -1,0 +1,11 @@
+agent_id,hostname,username_last_seen,os_system,os_release,os_version,os_machine,first_seen_at,last_seen_at,last_payload_id,status
+agt-1001,LT-JDOE,jdoe,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1002,LT-ASMITH,asmith,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1003,LT-MJONES,mjones,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1004,LT-BWILLIAMS,bwilliams,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1005,LT-CDAVIS,cdavis,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1006,LT-MSCOTT,mscott,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1007,LT-TJONES,tjones,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1008,LT-RWILSON,rwilson,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1009,LT-ESNOW,esnow,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online
+agt-1010,LT-BADMIN,badmin,Windows,10,10.0.19045,AMD64,2026-05-15 00:00:00+00,2026-06-13 00:00:00+00,none,online

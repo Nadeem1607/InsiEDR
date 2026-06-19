@@ -8,6 +8,7 @@ import math
 import os
 import shutil
 import sqlite3
+import sys
 import tempfile
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -67,20 +68,45 @@ def _matches_domain(host: str, domain_set: set[str]) -> bool:
 
 
 def _browser_history_paths() -> list[str]:
-    user = getpass.getuser()
-    local = os.path.join("C:\\Users", user, "AppData", "Local")
-    roaming = os.path.join("C:\\Users", user, "AppData", "Roaming")
-    paths = [
-        os.path.join(local, "Google", "Chrome", "User Data", "Default", "History"),
-        os.path.join(local, "Microsoft", "Edge", "User Data", "Default", "History"),
-    ]
-    firefox_root = os.path.join(roaming, "Mozilla", "Firefox", "Profiles")
-    if os.path.isdir(firefox_root):
-        for profile in os.listdir(firefox_root):
-            candidate = os.path.join(firefox_root, profile, "places.sqlite")
-            if os.path.isfile(candidate):
-                paths.append(candidate)
-    return [path for path in paths if os.path.isfile(path)]
+    """Discover browser history database paths specifically on Windows."""
+    if sys.platform != "win32":
+        return []
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    app_data = os.environ.get("APPDATA")
+    
+    paths = []
+
+    if local_app_data:
+        chromium_local_paths = [
+            os.path.join(local_app_data, "Google", "Chrome", "User Data", "Default", "History"),
+            os.path.join(local_app_data, "Microsoft", "Edge", "User Data", "Default", "History"),
+            os.path.join(local_app_data, "BraveSoftware", "Brave-Browser", "User Data", "Default", "History"),
+            os.path.join(local_app_data, "Vivaldi", "User Data", "Default", "History"),
+        ]
+        for path in chromium_local_paths:
+            if os.path.isfile(path):
+                paths.append(path)
+
+    if app_data:
+        opera_path = os.path.join(app_data, "Opera Software", "Opera Stable", "History")
+        if os.path.isfile(opera_path):
+            paths.append(opera_path)
+            
+        mozilla_bases = [
+            os.path.join(app_data, "Mozilla", "Firefox", "Profiles"),
+            os.path.join(app_data, "Waterfox", "Profiles"),
+            os.path.join(app_data, "Moonchild Productions", "Pale Moon", "Profiles"),
+        ]
+        
+        for base in mozilla_bases:
+            if os.path.isdir(base):
+                for profile in os.listdir(base):
+                    candidate = os.path.join(base, profile, "places.sqlite")
+                    if os.path.isfile(candidate):
+                        paths.append(candidate)
+
+    return paths
 
 
 def _safe_copy(src: str) -> str | None:
@@ -104,12 +130,43 @@ def _firefox_time_to_local(timestamp: int) -> datetime:
     return datetime.fromtimestamp(timestamp / 1_000_000, tz=timezone.utc).astimezone()
 
 
-def _read_browser_db(path: str) -> tuple[list[tuple[str, datetime]], int]:
+def _load_last_collection_time() -> datetime:
+    default_time = datetime.now().astimezone() - timedelta(minutes=6)
+    try:
+        path = default_state_dir() / "http_collection_state.json"
+        if path.exists():
+            iso = read_json_file(path).get("last_collected_at")
+            if iso:
+                saved_time = datetime.fromisoformat(iso).astimezone()
+                # SAFER SIDE: Enforce maximum lookback of 10 minutes
+                max_lookback = datetime.now().astimezone() - timedelta(minutes=10)
+                return max(saved_time, max_lookback)
+    except Exception:
+        pass
+    return default_time
+
+
+def _save_last_collection_time(dt: datetime) -> None:
+    try:
+        path = default_state_dir() / "http_collection_state.json"
+        write_json_file(path, {"last_collected_at": dt.isoformat()})
+    except Exception:
+        pass
+
+
+def _read_browser_db(path: str, last_collection: datetime) -> tuple[list[tuple[str, datetime]], int]:
     visits: list[tuple[str, datetime]] = []
     downloads = 0
     tmp = _safe_copy(path)
     if not tmp:
         return visits, downloads
+
+    # Calculate microsecond thresholds for SQL filtering
+    chrome_epoch = datetime(1601, 1, 1, tzinfo=timezone.utc)
+    chrome_threshold = int((last_collection - chrome_epoch).total_seconds() * 1_000_000)
+
+    firefox_epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    firefox_threshold = int((last_collection - firefox_epoch).total_seconds() * 1_000_000)
 
     try:
         conn = sqlite3.connect(f"file:{tmp}?mode=ro", uri=True, timeout=5)
@@ -120,39 +177,27 @@ def _read_browser_db(path: str) -> tuple[list[tuple[str, datetime]], int]:
                     """
                     SELECT urls.url, visits.visit_time
                     FROM visits JOIN urls ON visits.url = urls.id
-                    """
+                    WHERE visits.visit_time > ?
+                    """, (chrome_threshold,)
                 )
                 for url, timestamp in cur.fetchall():
                     try:
                         visits.append((url, _chrome_time_to_local(timestamp)))
                     except Exception as exc:
                         log.debug("skipped Chrome visit with invalid timestamp %s: %s", timestamp, exc)
-                try:
-                    cur.execute("SELECT COUNT(*) FROM downloads")
-                    downloads = int(cur.fetchone()[0])
-                except sqlite3.Error:
-                    pass
             else:
                 cur.execute(
                     """
                     SELECT p.url, h.visit_date
                     FROM moz_historyvisits h JOIN moz_places p ON h.place_id = p.id
-                    """
+                    WHERE h.visit_date > ?
+                    """, (firefox_threshold,)
                 )
                 for url, timestamp in cur.fetchall():
                     try:
                         visits.append((url, _firefox_time_to_local(timestamp)))
                     except Exception as exc:
                         log.debug("skipped Firefox visit with invalid timestamp %s: %s", timestamp, exc)
-                try:
-                    cur.execute(
-                        "SELECT COUNT(*) FROM moz_annos "
-                        "WHERE anno_attribute_id IN "
-                        "(SELECT id FROM moz_anno_attributes WHERE name='downloads/destinationFileURI')"
-                    )
-                    downloads = int(cur.fetchone()[0])
-                except sqlite3.Error:
-                    pass
         finally:
             conn.close()
     except Exception as exc:
@@ -191,18 +236,19 @@ def _domain_of(url: str) -> str:
 
 
 def collect_http_features() -> dict[str, object]:
+    last_collection = _load_last_collection_time()
+    now_collection = datetime.now().astimezone()
+
     all_visits: list[tuple[str, datetime]] = []
     total_downloads = 0
 
     for db_path in _browser_history_paths():
-        visits, downloads = _read_browser_db(db_path)
+        visits, downloads = _read_browser_db(db_path, last_collection)
         all_visits.extend(visits)
         total_downloads += downloads
 
-    today = datetime.now().astimezone().date()
-    todays_visits = [(url, ts) for url, ts in all_visits if ts.date() == today]
-
-    all_domains = [_domain_of(url) for url, _ in all_visits if _domain_of(url)]
+    # All visits are now strictly new (current time) due to SQL filter
+    todays_visits = all_visits
     today_domains = [_domain_of(url) for url, _ in todays_visits if _domain_of(url)]
 
     entropy = 0.0
@@ -216,9 +262,8 @@ def collect_http_features() -> dict[str, object]:
 
     known_hashes = _load_known_domain_hashes()
     current_hashes = {_hash_value(domain) for domain in today_domains}
-    all_hashes = {_hash_value(domain) for domain in all_domains}
     new_domain_hashes = current_hashes - known_hashes
-    _save_known_domain_hashes(known_hashes | all_hashes)
+    _save_known_domain_hashes(known_hashes | current_hashes)
 
     after_hours = sum(
         1
@@ -226,15 +271,29 @@ def collect_http_features() -> dict[str, object]:
         if timestamp.hour < WORK_HOUR_START or timestamp.hour >= WORK_HOUR_END
     )
 
+    # Format the extracted data as a detailed log ONLY for new visits
+    detailed_activity = []
+    for url, ts in todays_visits:
+        domain = _domain_of(url)
+        if domain:
+            detailed_activity.append({
+                "site_name": domain,
+                "accessed_at": ts.isoformat()
+            })
+            
+    _save_last_collection_time(now_collection)
+
+    unique_domains = sorted(list(set(today_domains)))
+
     data: dict[str, object] = {
         "collected_at": datetime.now(timezone.utc),
         "hostname": os.getenv("COMPUTERNAME", "unknown"),
         "username": getpass.getuser(),
         "http_count": len(all_visits),
         "unique_url_count": len({url for url, _ in all_visits}),
-        "watchlisted_url_count": sum(1 for domain in all_domains if _matches_domain(domain, WATCHLISTED_DOMAINS)),
-        "file_sharing_site_visits": sum(1 for domain in all_domains if _matches_domain(domain, FILE_SHARING_DOMAINS)),
-        "job_search_site_visits": sum(1 for domain in all_domains if _matches_domain(domain, JOB_SEARCH_DOMAINS)),
+        "watchlisted_url_count": sum(1 for domain in today_domains if _matches_domain(domain, WATCHLISTED_DOMAINS)),
+        "file_sharing_site_visits": sum(1 for domain in today_domains if _matches_domain(domain, FILE_SHARING_DOMAINS)),
+        "job_search_site_visits": sum(1 for domain in today_domains if _matches_domain(domain, JOB_SEARCH_DOMAINS)),
         "download_count": int(total_downloads),
         "upload_count": None,
         "http_after_hours": after_hours,
@@ -243,6 +302,8 @@ def collect_http_features() -> dict[str, object]:
         "daily_http_request_count": len(todays_visits),
         "daily_unique_domain_count": len(set(today_domains)),
         "daily_new_domain_count": len(new_domain_hashes),
+        "visited_domains": unique_domains,
+        "detailed_browser_activity": detailed_activity,
     }
 
     feature_quality = {key: "exact" for key in data}
@@ -279,6 +340,8 @@ EXPECTED_TYPES = {
     "daily_http_request_count": int,
     "daily_unique_domain_count": int,
     "daily_new_domain_count": int,
+    "visited_domains": list,
+    "detailed_browser_activity": list,
 }
 
 
@@ -296,7 +359,7 @@ def validate_data(data: dict[str, object]) -> list[str]:
 
 
 def collect() -> dict[str, object]:
-    return collect_http_features()
+    return {"status": "success", "payload": collect_http_features()}
 
 
 def collect_features() -> dict[str, object]:

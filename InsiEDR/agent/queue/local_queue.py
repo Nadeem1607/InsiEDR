@@ -9,16 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from shared.protocol import CRYPTO_SCHEME_AESGCM, CRYPTO_SCHEME_FERNET
-
 
 log = logging.getLogger(__name__)
-
-
-ENVELOPE_REQUIRED_FIELDS = {
-    CRYPTO_SCHEME_AESGCM: ("nonce", "ciphertext"),
-    CRYPTO_SCHEME_FERNET: ("token",),
-}
 
 
 @dataclass(frozen=True)
@@ -47,16 +39,21 @@ class LocalEncryptedQueue:
     ) -> None:
         self.queue_dir = Path(queue_dir).expanduser()
         self.dead_letter_dir = self.queue_dir / "dead_letter"
-        self.max_items = max(1, int(max_items))
-        self.max_bytes = max(1, int(max_bytes))
-        self.max_age_days = max(1, int(max_age_days))
+        self.max_items = max_items
+        self.max_bytes = max_bytes
+        self.max_age_days = max_age_days
         self.queue_dir.mkdir(parents=True, exist_ok=True)
         self.dead_letter_dir.mkdir(parents=True, exist_ok=True)
-        self._chmod_restrictive(self.queue_dir, 0o700)
-        self._chmod_restrictive(self.dead_letter_dir, 0o700)
-        self.enforce_limits()
+        try:
+            os.chmod(self.queue_dir, 0o700)
+            os.chmod(self.dead_letter_dir, 0o700)
+        except OSError:
+            pass
 
     def enqueue(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None) -> Path:
+        self._validate_envelope(envelope)
+        if headers is not None and not isinstance(headers, Mapping):
+            raise ValueError("queue headers must be an object")
         created = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         payload_id = str(envelope.get("payload_id") or uuid.uuid4())
         filename = f"{created}-{payload_id}-{uuid.uuid4().hex}{self.suffix}"
@@ -68,24 +65,22 @@ class LocalEncryptedQueue:
             "headers": dict(headers or {}),
             "envelope": dict(envelope),
         }
-        self._validate_body(body)
+        with tmp_path.open("w", encoding="utf-8") as fh:
+            json.dump(body, fh, sort_keys=True, separators=(",", ":"))
         try:
-            with tmp_path.open("w", encoding="utf-8") as fh:
-                json.dump(body, fh, sort_keys=True, separators=(",", ":"))
-        except Exception:
-            try:
-                tmp_path.unlink()
-            except OSError:
-                pass
-            raise
-        self._chmod_restrictive(tmp_path, 0o600)
+            os.chmod(tmp_path, 0o600)
+        except OSError:
+            pass
         tmp_path.replace(final_path)
-        self._chmod_restrictive(final_path, 0o600)
-        self.enforce_limits()
+        try:
+            os.chmod(final_path, 0o600)
+        except OSError:
+            pass
+        self._enforce_bounds()
         return final_path
 
     def iter_items(self, *, limit: int | None = None) -> Iterator[QueueItem]:
-        self.enforce_limits()
+        self._expire_old_items()
         yielded = 0
         for path in sorted(self.queue_dir.glob(f"*{self.suffix}")):
             if limit is not None and yielded >= limit:
@@ -93,16 +88,14 @@ class LocalEncryptedQueue:
             try:
                 with path.open("r", encoding="utf-8") as fh:
                     body = json.load(fh)
-                self._validate_body(body)
-                if self._is_expired(body, path):
-                    self._move_to_dead_letter(path, "expired")
-                    continue
-                if path.stat().st_size > self.max_bytes:
-                    self._move_to_dead_letter(path, "oversized")
-                    continue
+                if not isinstance(body, dict) or not isinstance(body.get("envelope"), dict):
+                    raise ValueError("queue file does not contain an encrypted envelope")
+                if not isinstance(body.get("headers", {}), dict):
+                    raise ValueError("queue file headers must be an object")
+                self._validate_envelope(body["envelope"])
             except Exception as exc:
                 log.warning("ignoring corrupt queue file %s: %s", path.name, exc)
-                self._move_to_dead_letter(path, "invalid")
+                self._move_to_dead_letter(path, reason="invalid")
                 continue
             yielded += 1
             yield QueueItem(path=path, body=body)
@@ -115,12 +108,13 @@ class LocalEncryptedQueue:
             pass
 
     def count(self) -> int:
-        self.enforce_limits()
         return sum(1 for _ in self.queue_dir.glob(f"*{self.suffix}"))
 
-    def dead_letter(self, item: QueueItem | Path, *, reason: str) -> Path | None:
-        path = item.path if isinstance(item, QueueItem) else Path(item)
-        return self._move_to_dead_letter(path, reason)
+    def dead_letter_count(self) -> int:
+        return sum(1 for path in self.dead_letter_dir.iterdir() if path.is_file())
+
+    def disk_usage_bytes(self) -> int:
+        return sum(path.stat().st_size for path in self.queue_dir.glob(f"*{self.suffix}") if path.is_file())
 
     def enqueue_dead_letter(
         self,
@@ -130,104 +124,61 @@ class LocalEncryptedQueue:
         reason: str,
     ) -> Path:
         path = self.enqueue(envelope, headers)
-        moved = self._move_to_dead_letter(path, reason)
-        if moved is None:
-            raise OSError("failed to move queue item to dead_letter")
-        return moved
+        return self._move_to_dead_letter(path, reason=reason)
 
-    def dead_letter_count(self) -> int:
-        return sum(1 for _ in self.dead_letter_dir.glob("*"))
+    def dead_letter(self, item: QueueItem | Path, *, reason: str) -> Path:
+        path = item.path if isinstance(item, QueueItem) else Path(item)
+        return self._move_to_dead_letter(path, reason=reason)
 
-    def disk_usage_bytes(self) -> int:
-        return sum(path.stat().st_size for path in self.queue_dir.glob(f"*{self.suffix}") if path.is_file())
+    @staticmethod
+    def _validate_envelope(envelope: Mapping[str, Any]) -> None:
+        if not isinstance(envelope, Mapping):
+            raise ValueError("encrypted envelope must be an object")
+        if envelope.get("scheme") != "aes-256-gcm":
+            raise ValueError("queue only accepts AES-GCM encrypted envelopes")
+        if not envelope.get("nonce") or not envelope.get("ciphertext"):
+            raise ValueError("encrypted envelope is missing nonce or ciphertext")
 
-    def enforce_limits(self) -> None:
-        paths = sorted(self.queue_dir.glob(f"*{self.suffix}"))
-        for path in list(paths):
+    def _expire_old_items(self) -> None:
+        cutoff_str = (datetime.now(timezone.utc) - timedelta(days=self.max_age_days)).strftime("%Y%m%dT%H%M%S")
+        for path in sorted(self.queue_dir.glob(f"*{self.suffix}")):
+            # Extract the 15-character timestamp prefix (%Y%m%dT%H%M%S) from the filename
+            # and use lexicographical string comparison to bypass expensive JSON parsing.
+            if path.name[:15] < cutoff_str:
+                self._move_to_dead_letter(path, reason="expired")
+
+    def _enforce_bounds(self) -> None:
+        self._expire_old_items()
+        
+        # Compute sizes exactly once to avoid O(N^2) I/O bottleneck
+        paths_with_size = []
+        total_bytes = 0
+        for p in sorted(self.queue_dir.glob(f"*{self.suffix}")):
             try:
-                with path.open("r", encoding="utf-8") as fh:
-                    body = json.load(fh)
-                self._validate_body(body)
-                if self._is_expired(body, path):
-                    self._move_to_dead_letter(path, "expired")
-                elif path.stat().st_size > self.max_bytes:
-                    self._move_to_dead_letter(path, "oversized")
-            except Exception:
-                self._move_to_dead_letter(path, "invalid")
+                size = p.stat().st_size
+                paths_with_size.append((p, size))
+                total_bytes += size
+            except OSError:
+                continue
 
-        paths = sorted(self.queue_dir.glob(f"*{self.suffix}"))
-        while len(paths) > self.max_items:
-            self._move_to_dead_letter(paths.pop(0), "max_items")
+        while len(paths_with_size) > self.max_items or total_bytes > self.max_bytes:
+            p, size = paths_with_size.pop(0)
+            self._move_to_dead_letter(p, reason="queue_limit")
+            total_bytes -= size
 
-        paths = sorted(self.queue_dir.glob(f"*{self.suffix}"))
-        total = sum(path.stat().st_size for path in paths if path.is_file())
-        while total > self.max_bytes and paths:
-            path = paths.pop(0)
+    def _move_to_dead_letter(self, path: Path, *, reason: str) -> Path:
+        safe_reason = "".join(char if char.isalnum() or char in "-_" else "_" for char in reason)
+        dead_path = self.dead_letter_dir / f"{path.name}.{safe_reason}-{uuid.uuid4().hex}"
+        try:
+            path.replace(dead_path)
             try:
-                total -= path.stat().st_size
+                os.chmod(dead_path, 0o600)
             except OSError:
                 pass
-            self._move_to_dead_letter(path, "max_bytes")
-
-    def _move_to_dead_letter(self, path: Path, reason: str) -> Path | None:
-        if not path.exists():
-            return None
-        safe_reason = "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in reason)[:40]
-        target = self.dead_letter_dir / f"{path.name}.{safe_reason}"
-        counter = 1
-        while target.exists():
-            target = self.dead_letter_dir / f"{path.name}.{safe_reason}.{counter}"
-            counter += 1
-        try:
-            path.replace(target)
-            self._chmod_restrictive(target, 0o600)
-            return target
+            return dead_path
         except OSError:
             try:
                 path.unlink()
             except OSError:
                 pass
-            return None
-
-    def _is_expired(self, body: Mapping[str, Any], path: Path) -> bool:
-        created_text = body.get("created_at")
-        created_at: datetime
-        if isinstance(created_text, str):
-            try:
-                created_at = datetime.fromisoformat(created_text.replace("Z", "+00:00"))
-            except ValueError:
-                created_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-        else:
-            created_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
-        return created_at < datetime.now(timezone.utc) - timedelta(days=self.max_age_days)
-
-    @staticmethod
-    def _chmod_restrictive(path: Path, mode: int) -> None:
-        if os.name == "nt":
-            return
-        try:
-            os.chmod(path, mode)
-        except OSError:
-            pass
-
-    @staticmethod
-    def _validate_body(body: Any) -> None:
-        if not isinstance(body, dict):
-            raise ValueError("queue file must contain a JSON object")
-        headers = body.get("headers", {})
-        if headers is not None and not isinstance(headers, dict):
-            raise ValueError("queue file headers must be an object")
-        envelope = body.get("envelope")
-        if not isinstance(envelope, dict):
-            raise ValueError("queue file does not contain an encrypted envelope")
-        scheme = envelope.get("scheme")
-        if not isinstance(scheme, str) or not scheme:
-            raise ValueError("queue envelope is missing an encryption scheme")
-        required = ENVELOPE_REQUIRED_FIELDS.get(scheme)
-        if required is None:
-            raise ValueError(f"queue envelope uses unsupported encryption scheme: {scheme}")
-        for field_name in required:
-            if not isinstance(envelope.get(field_name), str) or not envelope[field_name]:
-                raise ValueError(f"queue envelope is missing field: {field_name}")
+            return dead_path

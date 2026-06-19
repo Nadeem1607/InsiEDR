@@ -34,6 +34,15 @@ class ServerConfig:
     @property
     def require_https(self) -> bool:
         return os.environ.get("INSIEDR_REQUIRE_HTTPS", "true").lower() in ("1", "true", "yes")
+        
+    @property
+    def agent_bearer_token(self) -> str | None:
+        return os.environ.get("INSIEDR_AGENT_BEARER_TOKEN")
+        
+    @property
+    def active_model_version(self) -> str:
+        """The currently active ML artifact schema version (e.g., 'v2')."""
+        return os.environ.get("INSIEDR_ACTIVE_MODEL_VERSION", "v2")
 
     def load_aes_key(self) -> bytes:
         return load_aes_key(env_value=self.aes_key_env, key_path=self.aes_key_path)
@@ -48,12 +57,71 @@ class ServerConfig:
         return max(value, 1)
 
     @property
+    def payload_retention_days(self) -> int:
+        """Data Retention Policy (VERIFY_REQUIRED): Legal/Privacy must approve this default."""
+        raw = os.environ.get("INSIEDR_PAYLOAD_RETENTION_DAYS", "30")
+        try:
+            value = int(raw)
+        except ValueError:
+            value = 30
+        return max(value, 1)
+
+    @property
+    def feature_retention_days(self) -> int:
+        """Data Retention Policy (VERIFY_REQUIRED): Legal/Privacy must approve this default."""
+        raw = os.environ.get("INSIEDR_FEATURE_RETENTION_DAYS", "90")
+        try:
+            value = int(raw)
+        except ValueError:
+            value = 90
+        return max(value, 1)
+
+    @property
+    def baseline_window_days(self) -> int:
+        """Baseline Window Size for ML EMA decay calculations."""
+        raw = os.environ.get("INSIEDR_BASELINE_WINDOW_DAYS", "14")
+        try:
+            value = int(raw)
+        except ValueError:
+            value = 14
+        return max(value, 1)
+
+    @property
+    def zscore_calibration_threshold(self) -> float:
+        """Dynamic calibration cutoff for Z-Score models."""
+        raw = os.environ.get("INSIEDR_ZSCORE_CALIBRATION_THRESHOLD", "3.0")
+        try:
+            return float(raw)
+        except ValueError:
+            return 3.0
+
+    @property
     def enable_fernet(self) -> bool:
         return self._env_bool("INSIEDR_ENABLE_FERNET", False)
 
     @property
     def enable_plaintext_crypto(self) -> bool:
         return self._env_bool("INSIEDR_ENABLE_PLAINTEXT_CRYPTO", False)
+
+    @property
+    def store_plaintext_payloads(self) -> bool:
+        return self._env_bool("INSIEDR_STORE_PLAINTEXT_PAYLOADS", False)
+
+    @property
+    def enable_model_pipeline(self) -> bool:
+        return self._env_bool("INSIEDR_ENABLE_MODEL_PIPELINE", True)
+
+    @property
+    def model_isolation_forest_path(self) -> str:
+        return os.environ.get("INSIEDR_MODEL_IF_PATH", "v2_domain_isolation_forest.pkl")
+
+    @property
+    def model_scenario_xgb_path(self) -> str:
+        return os.environ.get("INSIEDR_MODEL_XGB_PATH", "v2_scenario_xgb.pkl")
+
+    @property
+    def model_inference_dir(self) -> str:
+        return os.environ.get("INSIEDR_MODEL_INFERENCE_DIR", ".")  # src/ and models/ live at repo root
 
     @property
     def fernet_key_env(self) -> str | None:
@@ -88,6 +156,8 @@ class ServerConfig:
             "replay_window_hours": str(self.replay_window_hours),
             "enable_fernet": str(self.enable_fernet),
             "enable_plaintext_crypto": str(self.enable_plaintext_crypto),
+            "enable_model_pipeline": str(self.enable_model_pipeline),
+            "model_inference_dir": self.model_inference_dir,
         }
 
 

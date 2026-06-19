@@ -5,11 +5,13 @@ import logging
 import os
 import platform
 import socket
+import subprocess
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
 
+from agent.state import default_state_dir, read_json_file, write_json_file
 
 log = logging.getLogger("devices_feature")
 
@@ -57,7 +59,7 @@ def _pywintypes_to_local_naive(pywints_dt: Any) -> datetime:
     return pywints_dt.astimezone().replace(tzinfo=None)
 
 
-def _query_event_log(channel: str, event_ids: set[int], hours_back: int = 24) -> list[UsbEvent]:
+def _query_event_log(channel: str, event_ids: set[int], cutoff: datetime) -> list[UsbEvent]:
     events: list[UsbEvent] = []
     if not IS_WINDOWS:
         return events
@@ -66,7 +68,6 @@ def _query_event_log(channel: str, event_ids: set[int], hours_back: int = 24) ->
     try:
         handle = win32evtlog.OpenEventLog(None, channel)
         flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
-        cutoff = datetime.now() - timedelta(hours=hours_back)
         while True:
             batch = win32evtlog.ReadEventLog(handle, flags, 0)
             if not batch:
@@ -131,12 +132,11 @@ def _parse_usb_event_xml(xml_text: str, event_ids: set[int]) -> UsbEvent | None:
     return UsbEvent(event_id=event_id, timestamp=timestamp, device_id=device_id, lifetime_id=lifetime_id)
 
 
-def _query_modern_event_channel(channel: str, event_ids: set[int], hours_back: int = 24) -> list[UsbEvent]:
+def _query_modern_event_channel(channel: str, event_ids: set[int], cutoff: datetime) -> list[UsbEvent]:
     events: list[UsbEvent] = []
     if not IS_WINDOWS or not hasattr(win32evtlog, "EvtQuery"):
         return events
 
-    cutoff = datetime.now() - timedelta(hours=hours_back)
     query = "*[System[{}]]".format(" or ".join(f"EventID={event_id}" for event_id in sorted(event_ids)))
     handle = None
     try:
@@ -211,6 +211,70 @@ def _enumerate_usbstor_registry() -> list[str]:
     return devices
 
 
+def _get_removable_bytes_written() -> dict[str, int]:
+    if not IS_WINDOWS:
+        return {}
+    
+    cmd = """
+    $removable = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=2" | Select-Object -ExpandProperty DeviceID
+    if ($removable) {
+        $perf = Get-WmiObject Win32_PerfRawData_PerfDisk_LogicalDisk | Where-Object { $removable -contains $_.Name }
+        $perf | Select-Object Name, DiskWriteBytesPersec | ConvertTo-Json -Compress
+    }
+    """
+    try:
+        output = subprocess.check_output(
+            ["powershell", "-NoProfile", "-Command", cmd],
+            text=True,
+            timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+        ).strip()
+        if not output:
+            return {}
+        
+        data = json.loads(output)
+        if isinstance(data, dict):
+            data = [data]
+            
+        return {item["Name"]: int(item["DiskWriteBytesPersec"]) for item in data if "Name" in item}
+    except Exception as exc:
+        log.debug("Failed to query removable bytes written: %s", exc)
+        return {}
+
+
+def _update_exfiltration_state(current_bytes: dict[str, int]) -> int:
+    state_file = default_state_dir() / "usb_exfiltration_state.json"
+    today = datetime.now(timezone.utc).date().isoformat()
+    
+    state = {}
+    try:
+        if state_file.exists():
+            state = read_json_file(state_file)
+    except Exception:
+        pass
+
+    if state.get("date") != today:
+        state["date"] = today
+        state["last_counters"] = {}
+
+    last_counters = state.setdefault("last_counters", {})
+    interval_delta = 0
+
+    for drive, bytes_written in current_bytes.items():
+        if drive in last_counters:
+            delta = bytes_written - last_counters[drive]
+            if delta > 0:
+                interval_delta += delta
+        last_counters[drive] = bytes_written
+
+    try:
+        write_json_file(state_file, state)
+    except Exception as exc:
+        log.warning("Failed to save USB exfiltration state: %s", exc)
+
+    return interval_delta
+
+
 def _synthetic_raw_telemetry() -> dict[str, Any]:
     now = datetime.now()
     return {
@@ -223,28 +287,55 @@ def _synthetic_raw_telemetry() -> dict[str, Any]:
             UsbEvent(2102, now.replace(hour=21, minute=10), "USB\\VID_0951&PID_1666", "LT2"),
         ],
         "registry_devices": ["08011B501A1CA932", "001EABE4A1B2C3D4"],
+        "daily_removable_bytes_written": 150000000,
         "synthetic_data": True,
     }
 
 
+def _load_last_collection_time() -> datetime:
+    try:
+        path = default_state_dir() / "devices_collection_state.json"
+        if path.exists():
+            iso = read_json_file(path).get("last_collected_at")
+            if iso:
+                return datetime.fromisoformat(iso).astimezone().replace(tzinfo=None)
+    except Exception:
+        pass
+    return datetime.now() - timedelta(minutes=6)
+
+
+def _save_last_collection_time(dt: datetime) -> None:
+    try:
+        path = default_state_dir() / "devices_collection_state.json"
+        write_json_file(path, {"last_collected_at": dt.isoformat()})
+    except Exception:
+        pass
+
+
 def collect_raw_usb_telemetry() -> dict[str, Any]:
-    connects = _query_event_log("System", USB_CONNECT_EVENT_IDS)
-    disconnects = _query_event_log("System", USB_DISCONNECT_EVENT_IDS)
+    cutoff = _load_last_collection_time()
+
+    connects = _query_event_log("System", USB_CONNECT_EVENT_IDS, cutoff)
+    disconnects = _query_event_log("System", USB_DISCONNECT_EVENT_IDS, cutoff)
     for channel in USB_MODERN_CHANNELS:
-        modern_events = _query_modern_event_channel(channel, USB_CONNECT_EVENT_IDS | USB_DISCONNECT_EVENT_IDS)
+        modern_events = _query_modern_event_channel(channel, USB_CONNECT_EVENT_IDS | USB_DISCONNECT_EVENT_IDS, cutoff)
         connects.extend(event for event in modern_events if event.event_id in USB_CONNECT_EVENT_IDS)
         disconnects.extend(event for event in modern_events if event.event_id in USB_DISCONNECT_EVENT_IDS)
-    connects += _query_event_log("Security", {6416})
+    connects += _query_event_log("Security", {6416}, cutoff)
 
     connects = _dedupe_usb_events(connects)
     disconnects = _dedupe_usb_events(disconnects)
     registry_devices = _enumerate_usbstor_registry()
+    
+    current_bytes = _get_removable_bytes_written()
+    daily_bytes = _update_exfiltration_state(current_bytes)
 
     if not IS_WINDOWS and not connects and not _allow_synthetic_data():
         return {
             "connects": [],
             "disconnects": [],
             "registry_devices": [],
+            "daily_removable_bytes_written": 0,
             "synthetic_disabled": True,
             "unsupported_reason": "synthetic USB collector data is disabled",
         }
@@ -255,6 +346,7 @@ def collect_raw_usb_telemetry() -> dict[str, Any]:
         "connects": connects,
         "disconnects": disconnects,
         "registry_devices": registry_devices,
+        "daily_removable_bytes_written": daily_bytes,
         "synthetic_data": False,
     }
 
@@ -278,6 +370,8 @@ def _empty_features() -> dict[str, Any]:
         "unique_usb_devices": 0,
         "daily_device_connect_count": 0,
         "daily_device_usage_flag": 0,
+        "last_usb_usage_time": None,
+        "daily_removable_bytes_written": 0,
     }
 
 
@@ -292,8 +386,8 @@ def derive_features(raw: dict[str, Any]) -> dict[str, Any]:
         if disconnect and disconnect.timestamp > connect.timestamp:
             total_seconds += int((disconnect.timestamp - connect.timestamp).total_seconds())
 
-    transfer_bytes = sum(event.bytes_written for event in connects)
-    transfer_count = sum(1 for event in connects if event.bytes_written > 0)
+    transfer_bytes = raw.get("daily_removable_bytes_written", 0)
+    transfer_count = sum(1 for event in connects if event.bytes_written > 0) or (1 if transfer_bytes > 0 else 0)
 
     features = _empty_features()
     features.update(
@@ -304,10 +398,12 @@ def derive_features(raw: dict[str, Any]) -> dict[str, Any]:
             "usb_file_transfer_count": transfer_count,
             "large_usb_transfer": bool(transfer_bytes > LARGE_USB_THRESHOLD_MB * 1024 * 1024),
             "first_usb_usage_time": min((event.timestamp for event in connects), default=None),
+            "last_usb_usage_time": max((event.timestamp for event in connects + disconnects), default=None),
             "after_hours_usb_usage": sum(1 for event in connects + disconnects if _is_after_hours(event.timestamp)),
             "unique_usb_devices": len({event.device_id for event in connects} | set(raw["registry_devices"])),
             "daily_device_connect_count": len(connects),
             "daily_device_usage_flag": 1 if connects or disconnects else 0,
+            "daily_removable_bytes_written": transfer_bytes,
         }
     )
 
@@ -321,6 +417,9 @@ def derive_features(raw: dict[str, Any]) -> dict[str, Any]:
     else:
         features["_collector_quality"] = "heuristic"
     features["_feature_quality"] = feature_quality
+    
+    now_collection = datetime.now()
+    _save_last_collection_time(now_collection)
     return features
 
 
@@ -336,8 +435,8 @@ def collect() -> dict[str, Any]:
                 "_feature_quality": {key: "unsupported" for key in features},
             }
         )
-        return features
-    return derive_features(raw)
+        return {"status": "unsupported", "payload": features}
+    return {"status": "success", "payload": derive_features(raw)}
 
 
 def collect_features() -> dict[str, Any]:
@@ -357,6 +456,7 @@ EXPECTED_FIELDS = {
     "unique_usb_devices": int,
     "daily_device_connect_count": int,
     "daily_device_usage_flag": int,
+    "daily_removable_bytes_written": int,
 }
 
 

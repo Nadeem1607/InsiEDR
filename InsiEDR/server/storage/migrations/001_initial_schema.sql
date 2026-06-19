@@ -8,18 +8,25 @@ CREATE TABLE IF NOT EXISTS agents (
     os_release TEXT,
     os_version TEXT,
     os_machine TEXT,
-    first_seen_at TIMESTAMP,
-    last_seen_at TIMESTAMP,
+    first_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     last_payload_id TEXT,
     status TEXT
+);
+
+CREATE TABLE IF NOT EXISTS training_labels (
+    agent_id TEXT PRIMARY KEY REFERENCES agents(agent_id),
+    is_malicious BOOLEAN NOT NULL DEFAULT FALSE,
+    labeled_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    labeled_by TEXT
 );
 
 CREATE TABLE IF NOT EXISTS raw_payloads (
     payload_id TEXT PRIMARY KEY,
     agent_id TEXT REFERENCES agents(agent_id),
-    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    envelope_created_at TIMESTAMP,
-    payload_collected_at TIMESTAMP,
+    received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    envelope_created_at TIMESTAMP WITH TIME ZONE,
+    payload_collected_at TIMESTAMP WITH TIME ZONE,
     hostname TEXT,
     username TEXT,
     crypto_scheme TEXT,
@@ -27,98 +34,99 @@ CREATE TABLE IF NOT EXISTS raw_payloads (
     nonce_hash TEXT,
     ciphertext_hash TEXT,
     decrypted_payload_hash TEXT,
-    encrypted_envelope_json TEXT,
+    encrypted_envelope_json JSONB,
     validation_status TEXT,
     duplicate_attempt_count INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS collector_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    payload_id TEXT NOT NULL,
-    agent_id TEXT,
+    id SERIAL PRIMARY KEY,
+    payload_id TEXT NOT NULL REFERENCES raw_payloads(payload_id) ON DELETE CASCADE,
+    agent_id TEXT REFERENCES agents(agent_id),
     collector TEXT,
-    collector_collected_at TIMESTAMP,
+    collector_collected_at TIMESTAMP WITH TIME ZONE,
     hostname TEXT,
     status TEXT,
-    payload_json TEXT,
+    payload_json JSONB,
     error_type TEXT,
     error_message TEXT,
     source_quality TEXT
 );
 
 CREATE TABLE IF NOT EXISTS normalized_features (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    payload_id TEXT NOT NULL,
-    agent_id TEXT,
+    id SERIAL PRIMARY KEY,
+    payload_id TEXT NOT NULL REFERENCES raw_payloads(payload_id) ON DELETE CASCADE,
+    agent_id TEXT REFERENCES agents(agent_id),
     username TEXT,
     hostname TEXT,
     collector TEXT,
     entity_user TEXT,
     feature_name TEXT,
-    feature_value_numeric REAL,
+    feature_value_numeric DOUBLE PRECISION,
     feature_value_text TEXT,
-    feature_value_json TEXT,
-    feature_timestamp TIMESTAMP,
+    feature_value_json JSONB,
+    feature_timestamp TIMESTAMP WITH TIME ZONE,
     source_quality TEXT,
     quality_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS model_outputs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    payload_id TEXT,
-    agent_id TEXT,
+    id SERIAL PRIMARY KEY,
+    payload_id TEXT REFERENCES raw_payloads(payload_id) ON DELETE CASCADE,
+    agent_id TEXT REFERENCES agents(agent_id),
     username TEXT,
     detector_name TEXT,
     model_version TEXT,
-    score REAL,
-    confidence REAL,
-    is_anomaly INTEGER,
-    feature_contributions_json TEXT,
+    score DOUBLE PRECISION,
+    confidence DOUBLE PRECISION,
+    is_anomaly BOOLEAN,
+    feature_contributions_json JSONB,
     reason_summary TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS anomalies (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    payload_id TEXT,
-    agent_id TEXT,
+    id SERIAL PRIMARY KEY,
+    payload_id TEXT REFERENCES raw_payloads(payload_id) ON DELETE CASCADE,
+    agent_id TEXT REFERENCES agents(agent_id),
     username TEXT,
     anomaly_type TEXT,
     severity TEXT,
-    detectors_json TEXT,
-    top_features_json TEXT,
+    detectors_json JSONB,
+    top_features_json JSONB,
     status TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    acknowledged_at TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    acknowledged_at TIMESTAMP WITH TIME ZONE,
     acknowledged_by TEXT
 );
 
 CREATE TABLE IF NOT EXISTS risk_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    payload_id TEXT,
-    agent_id TEXT,
+    id SERIAL PRIMARY KEY,
+    payload_id TEXT REFERENCES raw_payloads(payload_id) ON DELETE CASCADE,
+    agent_id TEXT REFERENCES agents(agent_id),
     username TEXT,
-    risk_score REAL,
+    risk_score DOUBLE PRECISION,
     risk_level TEXT,
-    correlated_signals_json TEXT,
+    correlated_signals_json JSONB,
     summary TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS baseline_snapshots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_id TEXT,
+    id SERIAL PRIMARY KEY,
+    agent_id TEXT REFERENCES agents(agent_id),
     username TEXT,
     feature_name TEXT,
     baseline_scope TEXT,
-    window_start TIMESTAMP,
-    window_end TIMESTAMP,
-    mean_value REAL,
-    std_value REAL,
+    window_start TIMESTAMP WITH TIME ZONE,
+    window_end TIMESTAMP WITH TIME ZONE,
+    mean_value DOUBLE PRECISION,
+    std_value DOUBLE PRECISION,
     sample_count INTEGER,
-    metadata_json TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    logic_version TEXT,
+    metadata_json JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_raw_payloads_agent_received ON raw_payloads(agent_id, received_at DESC);
