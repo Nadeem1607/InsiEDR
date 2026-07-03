@@ -143,7 +143,12 @@ def train_model(
     print()
     print("Applying SMOTE...")
 
+    # CHANGED: Apply SMOTE only to classes 1 and 3 (scaling to match class 0 count),
+    # leaving class 2 at its original count to improve model precision.
+    class_counts = y_train.value_counts()
+    class_0_count = class_counts[0]
     smote = SMOTE(
+        sampling_strategy={1: class_0_count, 3: class_0_count},
         random_state=42,
         k_neighbors=3
     )

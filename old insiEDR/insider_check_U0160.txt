@@ -1,0 +1,59 @@
+================================================================================
+INSIDER THREAT CHECK — USER: U0160
+WHAT THIS TOOL DOES: Analyzes daily endpoint logs to detect abnormal user behavior 
+and classifies potential insider threat paths using a three-tier model pipeline.
+================================================================================
+
+STAGE 1: DAILY ANOMALY SCORE (Isolation Forest)
+Checks each day's behavior against what's normal for this user population.
+
+| Date       | Domain Scores (L:Logon, F:File, D:Device, H:HTTP) | Overall Risk | Risk Tier |
+| :---       | :---                                              | :---:        | :---:     |
+| 2024-01-01 | L:0.3929 F:0.5015 D:0.4607 H:0.5838 | 0.6640 | MEDIUM |
+| 2024-01-02 | L:0.3912 F:0.5184 D:0.4607 H:0.3751 | 0.5977 | MEDIUM |
+| 2024-01-03 | L:0.5848 F:0.4990 D:0.4607 H:0.3654 | 0.6541 | MEDIUM |
+| 2024-01-04 | L:0.4410 F:0.5262 D:0.7274 H:0.3709 | 0.7073 | MEDIUM |
+| 2024-01-05 | L:0.6209 F:0.5250 D:0.4607 H:0.3810 | 0.6807 | MEDIUM |
+| ...        | ...                                                 | ...    | ...      |
+| 2024-03-26 | L:0.5820 F:0.5756 D:0.4607 H:0.4533 | 0.7095 | MEDIUM |
+| 2024-03-27 | L:0.7140 F:0.7828 D:0.4607 H:0.5605 | 0.8623 | HIGH |
+| 2024-03-28 | L:0.7014 F:0.7545 D:0.4607 H:0.4815 | 0.8213 | HIGH |
+| 2024-03-29 | L:0.7006 F:0.7840 D:0.4607 H:0.7062 | 0.9080 | HIGH |
+| 2024-03-30 | L:0.7167 F:0.7736 D:0.4607 H:0.6936 | 0.9057 | HIGH |
+
+STAGE 2: THREAT TYPE CLASSIFICATION (XGBoost)
+Predicts which of 6 categories each day's behavior resembles.
+
+| Date       | Predicted Class   | Confidence |
+| :---       | :---              | :---:      |
+| 2024-01-01 | normal          | 100.00% |
+| 2024-01-02 | normal          | 100.00% |
+| 2024-01-03 | normal          | 100.00% |
+| 2024-01-04 | normal          | 99.90% |
+| 2024-01-05 | normal          | 99.88% |
+| ...        | ...             | ...    |
+| 2024-03-26 | sabotage        | 100.00% |
+| 2024-03-27 | sabotage        | 100.00% |
+| 2024-03-28 | sabotage        | 100.00% |
+| 2024-03-29 | sabotage        | 100.00% |
+| 2024-03-30 | sabotage        | 100.00% |
+
+STAGE 3: BEHAVIORAL DRIFT OVER TIME (RedRVFL)
+Looks at the pattern across days, not just single days.
+
+Sequence length: 75 days | Drift error (MSE): 0.013838 | Final risk score: 0.086193
+
+FINAL VERDICT
+
+This user ranks N/A (User is in training split) out of 200 test users. Top-10 threshold: 1.711839
+
+VERDICT: NOT FLAGGED
+Ground truth (verification only, not used in scoring): Insider - sabotage
+Model verdict matches ground truth: NO
+
+HOW TO READ THIS
+
+A single HIGH day alone does not mean insider — Stage 3's pattern-over-time is the real signal.
+This model was trained using only each insider's final 10 active days as positive
+examples; performance on subtle/early-stage behavior has not been separately validated.
+================================================================================

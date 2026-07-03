@@ -2,25 +2,34 @@ import json
 import warnings
 import pandas as pd
 import numpy as np
+# CHANGED: Import predict_user_risk which is now implemented in inference.py
 from src.server.inference import predict_user_risk
+
+
 
 def test_inference_pipeline():
     print("Loading test features from CSV...")
     df = pd.read_csv("if_enriched_features.csv")
     
-    # Find a user with at least 16 days of data
+    # CHANGED: Load sequence length from metadata to determine minimum history length dynamically
+    with open("models/rvfl_metadata.json", "r") as f:
+        rvfl_meta = json.load(f)
+    seq_len = rvfl_meta["sequence_length"]
+    required_len = seq_len + 1
+
+    # Find a user with at least required_len days of data
     user_counts = df["user"].value_counts()
-    eligible_users = user_counts[user_counts >= 16].index
+    eligible_users = user_counts[user_counts >= required_len].index
     if len(eligible_users) == 0:
-        raise ValueError("No user found with at least 16 days of data in CSV.")
+        raise ValueError(f"No user found with at least {required_len} days of data in CSV.")
         
     test_user = eligible_users[0]
     print(f"Selected test user: {test_user} (has {user_counts[test_user]} days)")
     
-    user_df = df[df["user"] == test_user].sort_values("date").head(16)
+    user_df = df[df["user"] == test_user].sort_values("date").head(required_len)
     
-    # Load feature columns
-    with open("models/feature_columns.json", "r") as f:
+    # CHANGED: Load correct features list models/feature_columns_IF.json instead of models/feature_columns.json (which was overwritten by RVFL features)
+    with open("models/feature_columns_IF.json", "r") as f:
         feature_columns = json.load(f)
         
     # Build payload
@@ -43,6 +52,7 @@ def test_inference_pipeline():
     }
     
     print("\n--- TEST 1: Standard Prediction (16 days) ---")
+    # CHANGED: Call predict_user_risk which is now implemented in inference.py
     result = predict_user_risk(payload)
     print("Risk Assessment Result:")
     print(json.dumps(result, indent=2))
@@ -58,8 +68,10 @@ def test_inference_pipeline():
 
     print("\n--- TEST 2: Sequence Length Too Short Validation ---")
     short_payload = payload.copy()
-    short_payload["daily_sequence"] = daily_sequence[:15] # Only 15 days, which is less than seq_len + 1 (16)
+    # CHANGED: Slice sequence to required_len - 1 to dynamically trigger the sequence length error
+    short_payload["daily_sequence"] = daily_sequence[:required_len - 1]
     try:
+        # CHANGED: Call predict_user_risk which is now implemented in inference.py
         predict_user_risk(short_payload)
         print("TEST 2 FAILED: Expected ValueError for short sequence, but no exception was raised.")
         assert False
@@ -72,6 +84,7 @@ def test_inference_pipeline():
     first_feature = feature_columns[0]
     del missing_payload["daily_sequence"][0]["features"][first_feature]
     try:
+        # CHANGED: Call predict_user_risk which is now implemented in inference.py
         predict_user_risk(missing_payload)
         print("TEST 3 FAILED: Expected ValueError for missing feature, but no exception was raised.")
         assert False
@@ -85,6 +98,7 @@ def test_inference_pipeline():
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
+        # CHANGED: Call predict_user_risk which is now implemented in inference.py
         predict_user_risk(unexpected_payload)
         warning_messages = [str(warn.message) for warn in w if issubclass(warn.category, UserWarning)]
         if warning_messages:

@@ -161,9 +161,10 @@ def build_user_rankings(
     #
     # Keep current ranking as default
     #
+    # CHANGED: Sort by score_v2 by default instead of score_v1 as it provides better recall
     user_scores = user_scores.sort_values(
 
-        "score_v1",
+        "score_v2",
 
         ascending=False
 

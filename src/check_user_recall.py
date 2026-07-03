@@ -247,9 +247,10 @@ def main():
         load_test_insiders()
     )
 
+    # CHANGED: Sort by score_v2 by default as it is now the default scoring function, replacing score_v1
     users = pd.read_csv(
         TOP_USERS_FILE
-    )
+    ).sort_values("score_v2", ascending=False).reset_index(drop=True)
 
     candidate_scores = [
 
@@ -258,10 +259,17 @@ def main():
         for c in users.columns
 
         if c.startswith(
+
             "score"
+
         )
 
     ]
+
+    # Ensure score_v2 is the first candidate score evaluated
+    if "score_v2" in candidate_scores:
+        candidate_scores.remove("score_v2")
+        candidate_scores.insert(0, "score_v2")
 
     print()
     print("=" * 80)
