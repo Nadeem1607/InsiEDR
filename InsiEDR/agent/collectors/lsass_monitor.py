@@ -83,16 +83,6 @@ class LSASSMonitorCollector(BaseCollector):
             access_events = []
 
             handle = win32evtlog.OpenEventLog(server, log_type)
-            if bookmark == 0:
-                try:
-                    latest = win32evtlog.ReadEventLog(handle, flags, 0)
-                    if latest:
-                        bookmark = latest[0].RecordNumber
-                        max_record = bookmark
-                        self._save_bookmark(bookmark)
-                except Exception:
-                    pass
-            cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
             
             while True:
                 records = win32evtlog.ReadEventLog(handle, flags, 0)
@@ -103,9 +93,8 @@ class LSASSMonitorCollector(BaseCollector):
                     if record.RecordNumber > max_record:
                         max_record = record.RecordNumber
                     
-                    # Stop if we hit the bookmark or if the event is older than 5 minutes
-                    ts_utc = record.TimeGenerated.astimezone(timezone.utc)
-                    if record.RecordNumber <= bookmark or ts_utc < cutoff:
+                    # Stop if we hit the bookmark
+                    if record.RecordNumber <= bookmark:
                         break
                     
                     eid = record.EventID & 0xFFFF
@@ -117,11 +106,9 @@ class LSASSMonitorCollector(BaseCollector):
                             parsed["timestamp"] = record.TimeGenerated.astimezone(timezone.utc).isoformat()
                             access_events.append(parsed)
                 
-                # If we broke the inner loop because of bookmark or cutoff, break outer too
-                if records:
-                    last_rec = records[-1]
-                    if last_rec.RecordNumber <= bookmark or last_rec.TimeGenerated.astimezone(timezone.utc) < cutoff:
-                        break
+                # If we broke the inner loop because of bookmark, break outer too
+                if records and records[-1].RecordNumber <= bookmark:
+                    break
 
             self._save_bookmark(max_record)
             

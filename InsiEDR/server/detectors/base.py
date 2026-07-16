@@ -14,7 +14,7 @@ class Detector(ABC):
         pass
 
     @abstractmethod
-    def detect(self, payload_id: str, agent_id: str, username: str, features: Dict[str, float], baseline: Any) -> Dict[str, Any]:
+    def detect(self, payload_id: str, agent_id: str, username: str, features: Dict[str, float], baseline: Any, storage: Any = None) -> Dict[str, Any]:
         """
         Evaluate the normalized features against the baseline.
 

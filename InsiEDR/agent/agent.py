@@ -89,12 +89,7 @@ class EndpointAgent:
                 hostname=self.config.hostname,
                 status="success",
                 quality="exact",
-                payload={
-                    "manual_agent_stop_flag": 1, 
-                    "agent_status": "terminated_by_user",
-                    "force_stop_flag": 1,
-                    "tamper_detected_flag": 1
-                },
+                payload={"manual_agent_stop_flag": 1, "agent_status": "terminated_by_user"},
                 feature_quality={"manual_agent_stop_flag": "exact", "agent_status": "exact"}
             )
             payload = build_payload(
@@ -107,12 +102,14 @@ class EndpointAgent:
             envelope["payload_id"] = payload["payload_id"]
             headers = encrypted_payload_headers(envelope, self.config.agent_id, payload["payload_id"])
             
-            # Enforce strict timeout for the shutdown sequence
+            # Enforce strict 3-second timeout for the shutdown sequence
+            original_timeout = self.transport.timeout_seconds
+            self.transport.timeout_seconds = 3.0
             try:
-                send_result = self.transport.send_or_queue(envelope, headers, timeout_override=(1.0, 2.0))
+                send_result = self.transport.send_or_queue(envelope, headers)
                 log.info("Tamper payload dispatch complete (sent=%s, queued=%s)", send_result.ok, send_result.queued)
-            except Exception as e:
-                log.error("Failed to process tamper payload: %s", e)
+            finally:
+                self.transport.timeout_seconds = original_timeout
         except Exception as exc:
             log.error("Failed to process tamper payload: %s", exc)
 
@@ -126,8 +123,7 @@ class EndpointAgent:
             
             if ctrl_type in (win32con.CTRL_C_EVENT, win32con.CTRL_BREAK_EVENT, win32con.CTRL_CLOSE_EVENT):
                 log.warning("Manual forceful termination detected (event %s). Firing tamper flag.", ctrl_type)
-                if not self._tamper_fired:
-                    self._fire_tamper_flag()
+                self._fire_tamper_flag()
                 self.stop()
                 return True
                 
@@ -136,8 +132,7 @@ class EndpointAgent:
     def _posix_signal_handler(self, signum: int, frame: Any) -> None:
         """Fallback/supplementary handler for standard POSIX signals like SIGTERM."""
         log.warning("Manual forceful termination detected via signal %s. Firing tamper flag.", signum)
-        if not self._tamper_fired:
-            self._fire_tamper_flag()
+        self._fire_tamper_flag()
         self.stop()
         sys.exit(0)
 
@@ -171,10 +166,6 @@ class EndpointAgent:
     def run_once(self) -> AgentRunSummary:
         retry_summary = self.transport.retry_queued(limit=self.config.queue_retry_limit)
         results = run_collectors(self.collectors)
-        
-        # We must ALWAYS send payloads to maintain the agent's ONLINE heartbeat status.
-        # Idle payloads are safely handled by the server's ML pipeline.
-
         payload = build_payload(
             agent_id=self.config.agent_id,
             hostname=self.config.hostname,
@@ -234,25 +225,8 @@ class EndpointAgent:
         signal.signal(signal.SIGINT, self._posix_signal_handler)
         signal.signal(signal.SIGTERM, self._posix_signal_handler)
         
-        stop_file = self.config.state_dir / "stop.signal"
-        if stop_file.exists():
-            try:
-                stop_file.unlink()
-            except OSError:
-                pass
-
         log.info("agent started with %d collector(s)", len(self.collectors))
         while not self._stopping:
-            if stop_file.exists():
-                log.info("Stop signal file detected. Firing tamper payload.")
-                try:
-                    stop_file.unlink()
-                except OSError:
-                    pass
-                if not self._tamper_fired:
-                    self._fire_tamper_flag()
-                break
-
             started = time.monotonic()
             try:
                 self.run_once()
@@ -262,8 +236,6 @@ class EndpointAgent:
             sleep_for = max(1.0, self.config.interval_seconds - elapsed)
             end = time.monotonic() + sleep_for
             while not self._stopping and time.monotonic() < end:
-                if stop_file.exists():
-                    break
                 time.sleep(min(1.0, end - time.monotonic()))
 
 

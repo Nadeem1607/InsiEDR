@@ -40,6 +40,7 @@ DEFAULT_DISCOVERY_COLLECTORS = (
     "decoy-monitor",
     "email-monitor",
     "process-watcher",
+    "keystroke-collector",
 )
 
 
@@ -98,6 +99,10 @@ COLLECTOR_SPECS = {
         "filename": "logon.py",
         "fallback": _logon_fallback,
         "aliases": {"logon", "session-monitor", "session_monitor", "logon.py"},
+    },
+    "keystroke-collector": {
+        "filename": "keystroke_collector.py",
+        "aliases": {"keystroke-collector", "keystroke_collector", "keystroke_collector.py"},
     },
     "network-monitor": {
         "filename": "network_monitor.py",
@@ -246,38 +251,20 @@ def run_collectors(collectors: Iterable[BaseCollector]) -> list[CollectorResult]
     deadlines: list[float] = []
     started = time.monotonic()
     for index, collector in enumerate(collector_list):
-        # Prevent Thread Leakage: If a collector from a previous 5-minute cycle hung indefinitely 
-        # (e.g. frozen WMI query), do not spawn a duplicate thread that will also hang.
-        prev_thread = getattr(collector, "_active_thread", None)
-        if prev_thread is not None and prev_thread.is_alive():
-            log.warning("Skipping collector %s: previous thread is still hung and running", collector.name)
-            threads.append(prev_thread) # Add to list so we can track it, but don't start a new one
-            deadlines.append(time.monotonic()) # Expired immediately
-            continue
-            
         thread = threading.Thread(
             target=collect_one,
             args=(index, collector),
             name=f"insiedr-collector-{collector.name}",
             daemon=True,
         )
-        setattr(collector, "_active_thread", thread)
         threads.append(thread)
         deadlines.append(started + max(1, int(getattr(collector, "timeout_seconds", 30))))
         thread.start()
 
     for index, (collector, thread, deadline) in enumerate(zip(collector_list, threads, deadlines)):
-        # If it was a hung thread from a previous cycle, skip joining to prevent blocking
-        if getattr(collector, "_active_thread", None) is thread and getattr(thread, "_was_hung", False):
-            remaining = 0.0
-        else:
-            remaining = max(0.0, deadline - time.monotonic())
-            
-        if remaining > 0:
-            thread.join(remaining)
-            
+        remaining = max(0.0, deadline - time.monotonic())
+        thread.join(remaining)
         if thread.is_alive():
-            setattr(thread, "_was_hung", True)
             with lock:
                 if results[index] is None:
                     timeout_seconds = max(1, int(getattr(collector, "timeout_seconds", 30)))

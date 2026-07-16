@@ -528,7 +528,8 @@
           <div class="section-title">
             <span class="icon">🔍</span> Raw Telemetry Logs 
             <span id="activeFilterBadge" style="display:none; margin-left: 10px; font-size: 11px; padding: 4px 10px; border-radius: 6px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 600;"></span>
-            <button id="clearFilterBtn" onclick="clearCollectorFilter()" style="display:none; margin-left: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600; transition: all 0.2s;">✕ Clear</button>
+            <input type="text" id="filterUser" placeholder="Search by Username (Press Enter)..." style="margin-left: 15px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-primary); background: rgba(255,255,255,0.05); color: white; font-size: 12px; width: 220px;" onkeyup="if(event.key === 'Enter') { activeUsernameFilter = this.value.trim(); document.getElementById('clearFilterBtn').style.display = 'inline-block'; loadLogs(); }">
+            <button id="clearFilterBtn" onclick="clearFilters()" style="display:none; margin-left: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600; transition: all 0.2s;">✕ Clear</button>
           </div>
           <button class="refresh-toggle" onclick="loadLogs()" style="border-radius: 6px; padding: 8px 16px; background: var(--bg-elevated); color: white; border: none; cursor: pointer;">Refresh Logs</button>
         </div>
@@ -1054,14 +1055,19 @@
             { name: 'Process', key: 'process', icon: '⚙️', cls: 'process' },
             { name: 'Network', key: 'network', icon: '📡', cls: 'network' },
           ];
+          const collectorCounts = stats.collector_counts || {};
           const totalSuccess = collectorStatus.success || 0;
           const totalError = collectorStatus.error || 0;
           const totalResults = stats.collector_results || 0;
 
           const grid = document.getElementById('collectorGrid');
           grid.innerHTML = collectors.map(c => {
-            const status = totalResults > 0 ? 'ok' : 'na';
-            const meta = totalResults > 0 ? `${totalSuccess} reports` : 'Awaiting data';
+            let count = 0;
+            Object.keys(collectorCounts).forEach(k => {
+                if (k.includes(c.key)) count += collectorCounts[k];
+            });
+            const status = count > 0 ? 'ok' : 'na';
+            const meta = count > 0 ? `${count} reports` : 'Awaiting data';
             return `
               <div class="collector-pill" style="cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'" onclick="filterLogsByCollector('${c.key}')">
                 <div class="collector-icon ${c.cls}">${c.icon}</div>
@@ -1291,6 +1297,7 @@
       let currentLogsOffset = 0;
       const LOGS_PAGE_SIZE = 100;
       let activeCollectorFilter = null;
+      let activeUsernameFilter = null;
 
       function filterLogsByCollector(collector) {
           activeCollectorFilter = collector;
@@ -1301,8 +1308,10 @@
           loadLogs(false);
       }
 
-      function clearCollectorFilter() {
+      function clearFilters() {
           activeCollectorFilter = null;
+          activeUsernameFilter = null;
+          document.getElementById('filterUser').value = '';
           document.getElementById('activeFilterBadge').style.display = 'none';
           document.getElementById('clearFilterBtn').style.display = 'none';
           loadLogs(false);
@@ -1342,6 +1351,9 @@
             if (activeCollectorFilter) {
                 url += `&collector=${encodeURIComponent(activeCollectorFilter)}`;
             }
+            if (activeUsernameFilter) {
+                url += `&username=${encodeURIComponent(activeUsernameFilter)}`;
+            }
             const data = await api(url);
             const newLogs = data.logs || [];
             
@@ -1363,22 +1375,36 @@
                
                let details = '<span style="color:var(--text-muted);font-style:italic">No parameters</span>';
                try {
-                   const p = typeof log.payload === 'string' ? JSON.parse(log.payload) : (log.payload || {});
+                   let p = typeof log.payload === 'string' ? JSON.parse(log.payload) : (log.payload || {});
+                   // Un-nest historical double-wrapped payloads
+                   if (p && p.payload && p.status && p.collector) {
+                       p = p.payload;
+                   }
                    let detailsArray = [];
                    if (log.collector === 'logon' && p.action) {
                        detailsArray.push(`<span style="color:#94a3b8">Action:</span> <b>${safe(p.action)}</b>`, `<span style="color:#94a3b8">Type:</span> <b>${safe(p.logon_type)}</b>`, `<span style="color:#94a3b8">IP:</span> <b>${safe(p.remote_ip)}</b>`);
                    } else if (log.collector === 'file' && p.file_path) {
                        detailsArray.push(`<span style="color:#94a3b8">Action:</span> <b>${safe(p.action)}</b>`, `<span style="color:#94a3b8">File:</span> <b>${safe(p.file_path)}</b>`);
-                   } else if (log.collector === 'process' && p.process_name) {
-                       detailsArray.push(`<span style="color:#94a3b8">Process:</span> <b>${safe(p.process_name)}</b>`, `<span style="color:#94a3b8">Cmd:</span> <b>${safe(p.command_line)}</b>`);
+                   } else if (log.collector === 'process-events' && p.process_start_events && p.process_start_events.length > 0) {
+                        const firstEvent = p.process_start_events[0];
+                        detailsArray.push(`<span style="color:#94a3b8">Process:</span> <b>${safe(firstEvent.process_name)}</b>`, `<span style="color:#94a3b8">Cmd:</span> <b>${safe(firstEvent.command_line)}</b>`);
+                        if (p.event_count > 1) {
+                            detailsArray.push(`<span style="color:var(--text-muted);font-size:10px;">+${p.event_count - 1} more events</span>`);
+                        }
+                   } else if (log.collector === 'process-watcher') {
+                        detailsArray.push(`<span style="color:#94a3b8">Daily Unique:</span> <b>${safe(p.daily_unique_process_count)}</b>`, `<span style="color:#94a3b8">Admin Procs:</span> <b>${safe(p.admin_process_count)}</b>`);
                    } else if (log.collector === 'network' && p.destination_ip) {
                        detailsArray.push(`<span style="color:#94a3b8">Dst:</span> <b>${safe(p.destination_ip)}:${safe(p.destination_port)}</b>`);
                    } else if (log.collector === 'http' && p.url) {
                        detailsArray.push(`<span style="color:#94a3b8">Method:</span> <b>${safe(p.method)}</b>`, `<span style="color:#94a3b8">URL:</span> <b>${safe(p.url)}</b>`);
                    } else if (log.collector === 'device' && p.device_id) {
                        detailsArray.push(`<span style="color:#94a3b8">Action:</span> <b>${safe(p.action)}</b>`, `<span style="color:#94a3b8">Device:</span> <b>${safe(p.device_id)}</b>`);
-                   } else if (log.collector === 'email' && p.subject) {
-                       detailsArray.push(`<span style="color:#94a3b8">Subj:</span> <b>${safe(p.subject)}</b>`, `<span style="color:#94a3b8">To:</span> <b>${safe(p.recipient)}</b>`);
+                   } else if (log.collector === 'email-monitor' && p.raw_emails && p.raw_emails.length > 0) {
+                       const firstEmail = p.raw_emails[0];
+                       detailsArray.push(`<span style="color:#94a3b8">Subj:</span> <b>${safe(firstEmail.subject)}</b>`, `<span style="color:#94a3b8">To:</span> <b>${safe(firstEmail.recipients)}</b>`);
+                       if (p.raw_emails.length > 1) {
+                           detailsArray.push(`<span style="color:var(--text-muted);font-size:10px;">+${p.raw_emails.length - 1} more emails</span>`);
+                       }
                    } else {
                        const keys = Object.keys(p);
                        if (keys.length > 0) {
@@ -1457,10 +1483,12 @@
          const trs = document.querySelectorAll('#logsTableBody tr');
          trs.forEach((tr, i) => tr.classList.toggle('selected', i === index));
          
-         // Populate Raw
          let payload = log.payload;
          if (typeof payload === 'string') {
              try { payload = JSON.parse(payload); } catch(e) {}
+         }
+         if (payload && payload.payload && payload.status && payload.collector) {
+             payload = payload.payload;
          }
          
          let visualHTML = '';

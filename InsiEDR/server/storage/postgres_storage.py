@@ -12,19 +12,139 @@ from server.storage.migration_runner import apply_migrations_dir
 
 import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
-from psycopg2.extras import Json
+from psycopg2.extras import Json, execute_batch
 
 from server.config import config
 from shared.crypto_utils import CryptoConfigError
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
+class _SQLiteCursorAdapter:
+    """Wraps a SQLite cursor to translate psycopg2 %s params → SQLite ? params."""
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def _adapt_sql(self, sql: str) -> str:
+        import re
+        # %s → ?
+        sql = sql.replace("%s", "?")
+        # Strip PostgreSQL type casts: ::timestamp, ::text, ::int, etc.
+        sql = re.sub(r"::[a-zA-Z_ ]+( with time zone)?", "", sql)
+        # Strip RETURNING clauses (not supported by SQLite), set flag
+        if " RETURNING " in sql.upper():
+            sql = sql[:sql.upper().rfind(" RETURNING ")]
+            self._had_returning = True
+        else:
+            self._had_returning = False
+        # Replace PostgreSQL interval: X - INTERVAL '5 minutes' → datetime(X, '-5 minutes')
+        sql = re.sub(
+            r"(NOW\(\)|CURRENT_TIMESTAMP)\s*-\s*INTERVAL\s*'(\d+)\s+minutes?'",
+            r"datetime('now', '-\2 minutes')",
+            sql,
+            flags=re.IGNORECASE
+        )
+        return sql
+
+    def _adapt_params(self, params):
+        """Serialize psycopg2 Json objects to strings for SQLite."""
+        if params is None:
+            return None
+        try:
+            from psycopg2.extras import Json as PgJson
+        except ImportError:
+            return params
+        result = []
+        for p in params:
+            if isinstance(p, PgJson):
+                result.append(json.dumps(p.adapted))
+            else:
+                result.append(p)
+        return tuple(result)
+
+    def execute(self, sql: str, params=None):
+        sql = self._adapt_sql(sql)
+        if params is None:
+            self._cursor.execute(sql)
+        else:
+            self._cursor.execute(sql, self._adapt_params(params))
+        return self
+
+    def executemany(self, sql: str, params_list):
+        sql = self._adapt_sql(sql)
+        adapted_list = [self._adapt_params(p) for p in params_list]
+        self._cursor.executemany(sql, adapted_list)
+        return self
+
+    def fetchone(self):
+        if getattr(self, "_had_returning", False):
+            # RETURNING was stripped — only return a dummy non-None row if a real
+            # insert happened (rowcount == 1). If 0, the ON CONFLICT DO NOTHING fired.
+            self._had_returning = False
+            if self._cursor.rowcount == 1:
+                return ("ok",)
+            return None
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    @property
+    def description(self):
+        return self._cursor.description
+
+    def close(self):
+        self._cursor.close()
+
+
+class _SQLiteParamAdapter:
+    """Wraps a SQLite connection exposing a psycopg2-compatible cursor() interface."""
+    def __init__(self, conn):
+        self._conn = conn
+
+    def cursor(self):
+        return _SQLiteCursorAdapter(self._conn.cursor())
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    def execute(self, sql: str, params=None):
+        sql = sql.replace("%s", "?")
+        if params is None:
+            return self._conn.execute(sql)
+        return self._conn.execute(sql, params)
+
+    def executescript(self, sql: str):
+        return self._conn.executescript(sql)
+
+
 class PostgresStorage(BaseStorage):
-    def __init__(self, dsn: str | None = None, minconn=1, maxconn=20, connection_factory=None) -> None:
+    def __init__(self, dsn: str | None = None, minconn=1, maxconn=32, connection_factory=None) -> None:
         self.connection_factory = connection_factory
+        self._is_sqlite = False
         if self.connection_factory:
             self.dsn = dsn
             self.pool = None
+            # Detect if we're running against SQLite (for tests)
+            try:
+                import sqlite3
+                test_conn = connection_factory()
+                if isinstance(test_conn, sqlite3.Connection):
+                    self._is_sqlite = True
+            except Exception:
+                pass
             return
             
         self.dsn = dsn or os.environ.get("INSIEDR_SERVER_POSTGRES_URI")
@@ -36,7 +156,11 @@ class PostgresStorage(BaseStorage):
     @contextmanager
     def connection(self):
         if self.connection_factory:
-            yield self.connection_factory()
+            raw_conn = self.connection_factory()
+            if self._is_sqlite:
+                yield _SQLiteParamAdapter(raw_conn)
+            else:
+                yield raw_conn
             return
             
         conn = self.pool.getconn()
@@ -44,6 +168,12 @@ class PostgresStorage(BaseStorage):
             yield conn
         finally:
             self.pool.putconn(conn)
+
+    def _sql(self, query: str) -> str:
+        """Translate %s → ? when running against SQLite (test mode only)."""
+        if self._is_sqlite:
+            return query.replace("%s", "?")
+        return query
 
     @staticmethod
     def _stable_json(value: Any) -> str:
@@ -212,82 +342,100 @@ class PostgresStorage(BaseStorage):
                         conn.commit()
                         return
 
+                    collector_results_args = []
+                    risk_events_args = []
+                    normalized_features_args = []
+
                     for collector_result in decrypted_payload.get("collectors", []):
                         payload = collector_result.get("payload") if isinstance(collector_result, dict) else None
                         error = collector_result.get("error") if isinstance(collector_result, dict) else None
                         source_quality = self._collector_source_quality(collector_result)
                         
-                        cursor.execute(
-                            """
+                        collector_results_args.append((
+                            payload_id,
+                            decrypted_payload.get("agent_id"),
+                            collector_result.get("collector"),
+                            collector_result.get("collected_at"),
+                            collector_result.get("hostname"),
+                            collector_result.get("status"),
+                            Json(payload) if config.store_plaintext_payloads and payload else None,
+                            error.get("type") if isinstance(error, dict) else None,
+                            error.get("message") if isinstance(error, dict) else None,
+                            source_quality,
+                        ))
+                        
+                        if collector_result.get("collector") == "tamper" or collector_result.get("status") == "critical":
+                            risk_events_args.append((
+                                payload_id,
+                                decrypted_payload.get("agent_id"),
+                                decrypted_payload.get("username"),
+                                100.0,
+                                "HIGH",
+                                Json({
+                                    "collector": "tamper",
+                                    "hostname": collector_result.get("hostname"),
+                                    "user": decrypted_payload.get("username")
+                                }),
+                                f"Agent Tamper Alert: Agent termination attempted on {collector_result.get('hostname')} by user {decrypted_payload.get('username')}. Msg: {collector_result.get('msg', 'Agent tried to terminate')}",
+                                collector_result.get("collected_at"),
+                            ))
+
+                        for feature in self._feature_rows(decrypted_payload, collector_result, source_quality):
+                            normalized_features_args.append((
+                                feature["payload_id"],
+                                feature["agent_id"],
+                                feature["username"],
+                                feature["hostname"],
+                                feature["collector"],
+                                feature["entity_user"],
+                                feature["feature_name"],
+                                feature["feature_value_numeric"],
+                                feature["feature_value_text"],
+                                feature["feature_value_json"],
+                                feature["feature_timestamp"],
+                                feature["source_quality"],
+                                feature["quality_notes"],
+                                decrypted_payload.get("collected_at"),
+                            ))
+                    
+                    is_sqlite = getattr(cursor, "_is_sqlite", False) or hasattr(cursor, "_adapt_sql")
+
+                    if collector_results_args:
+                        q = """
                             INSERT INTO collector_results (
                                 payload_id, agent_id, collector, collector_collected_at, hostname,
                                 status, payload_json, error_type, error_message, source_quality
                             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            """,
-                            (
-                                payload_id,
-                                decrypted_payload.get("agent_id"),
-                                collector_result.get("collector"),
-                                collector_result.get("collected_at"),
-                                collector_result.get("hostname"),
-                                collector_result.get("status"),
-                                Json(payload) if config.store_plaintext_payloads and payload else None,
-                                error.get("type") if isinstance(error, dict) else None,
-                                error.get("message") if isinstance(error, dict) else None,
-                                source_quality,
-                            ),
-                        )
-                        
-                        if collector_result.get("collector") == "tamper" or collector_result.get("status") == "critical":
-                            cursor.execute(
-                                """
-                                INSERT INTO risk_events (
-                                    payload_id, agent_id, username, risk_score, risk_level,
-                                    correlated_signals_json, summary, created_at
-                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamp, CURRENT_TIMESTAMP))
-                                """,
-                                (
-                                    payload_id,
-                                    decrypted_payload.get("agent_id"),
-                                    decrypted_payload.get("username"),
-                                    100.0,
-                                    "HIGH",
-                                    Json({
-                                        "collector": "tamper",
-                                        "hostname": collector_result.get("hostname"),
-                                        "user": decrypted_payload.get("username")
-                                    }),
-                                    f"Agent Tamper Alert: Agent termination attempted on {collector_result.get('hostname')} by user {decrypted_payload.get('username')}. Msg: {collector_result.get('msg', 'Agent tried to terminate')}",
-                                    collector_result.get("collected_at"),
-                                ),
-                            )
+                            """
+                        if is_sqlite:
+                            cursor.executemany(q, collector_results_args)
+                        else:
+                            execute_batch(cursor, q, collector_results_args)
 
-                        for feature in self._feature_rows(decrypted_payload, collector_result, source_quality):
-                            cursor.execute(
-                                """
-                                INSERT INTO normalized_features (
-                                    payload_id, agent_id, username, hostname, collector, entity_user,
-                                    feature_name, feature_value_numeric, feature_value_text, feature_value_json,
-                                    feature_timestamp, source_quality, quality_notes, created_at
-                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamp, CURRENT_TIMESTAMP))
-                                """,
-                                (
-                                    feature["payload_id"],
-                                    feature["agent_id"],
-                                    feature["username"],
-                                    feature["hostname"],
-                                    feature["collector"],
-                                    feature["entity_user"],
-                                    feature["feature_name"],
-                                    feature["feature_value_numeric"],
-                                    feature["feature_value_text"],
-                                    feature["feature_value_json"],
-                                    feature["feature_timestamp"],
-                                    feature["source_quality"],
-                                    feature["quality_notes"],
-                                    decrypted_payload.get("collected_at"),
-                                ),
-                            )
+                    if risk_events_args:
+                        q = """
+                            INSERT INTO risk_events (
+                                payload_id, agent_id, username, risk_score, risk_level,
+                                correlated_signals_json, summary, created_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamp, CURRENT_TIMESTAMP))
+                            """
+                        if is_sqlite:
+                            cursor.executemany(q, risk_events_args)
+                        else:
+                            execute_batch(cursor, q, risk_events_args)
+
+                    if normalized_features_args:
+                        q = """
+                            INSERT INTO normalized_features (
+                                payload_id, agent_id, username, hostname, collector, entity_user,
+                                feature_name, feature_value_numeric, feature_value_text, feature_value_json,
+                                feature_timestamp, source_quality, quality_notes, created_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamp, CURRENT_TIMESTAMP))
+                            """
+                        if is_sqlite:
+                            cursor.executemany(q, normalized_features_args)
+                        else:
+                            execute_batch(cursor, q, normalized_features_args)
                     conn.commit()
                 except Exception:
                     conn.rollback()
@@ -359,8 +507,8 @@ class PostgresStorage(BaseStorage):
                     where.append("rp.username = %s")
                     params.append(username)
                 if collector:
-                    where.append("EXISTS (SELECT 1 FROM collector_results cr WHERE cr.payload_id = rp.payload_id AND cr.collector = %s)")
-                    params.append(collector)
+                    where.append("EXISTS (SELECT 1 FROM collector_results cr WHERE cr.payload_id = rp.payload_id AND cr.collector LIKE %s)")
+                    params.append(f"%{collector}%")
                 if status:
                     where.append("EXISTS (SELECT 1 FROM collector_results crs WHERE crs.payload_id = rp.payload_id AND crs.status = %s)")
                     params.append(status)
@@ -386,11 +534,20 @@ class PostgresStorage(BaseStorage):
                 )
                 return self._rows_to_dicts(cursor)
 
-    def list_collector_results(self, limit: int = 100, offset: int = 0, collector: str = None) -> list[dict[str, Any]]:
+    def list_collector_results(self, limit: int = 100, offset: int = 0, collector: str = None, username: str = None) -> list[dict[str, Any]]:
         with self.connection() as conn:
             with closing(conn.cursor()) as cursor:
-                where_clause = "WHERE cr.collector = %s" if collector else ""
-                params = [collector, limit, offset] if collector else [limit, offset]
+                where_parts = []
+                params = []
+                if collector:
+                    where_parts.append("cr.collector ILIKE %s")
+                    params.append(f"%{collector}%")
+                if username:
+                    where_parts.append("rp.username ILIKE %s")
+                    params.append(f"%{username}%")
+                
+                where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
+                params.extend([limit, offset])
                 
                 cursor.execute(
                     f"""
@@ -510,6 +667,11 @@ class PostgresStorage(BaseStorage):
                     stats["collector_status"] = {row[0]: row[1] for row in cursor.fetchall()}
                 except Exception:
                     stats["collector_status"] = {}
+                try:
+                    cursor.execute("SELECT collector, COUNT(*) FROM collector_results GROUP BY collector")
+                    stats["collector_counts"] = {row[0]: row[1] for row in cursor.fetchall()}
+                except Exception:
+                    stats["collector_counts"] = {}
                 try:
                     cursor.execute("SELECT source_quality, COUNT(*) FROM normalized_features GROUP BY source_quality")
                     stats["source_quality"] = {row[0]: row[1] for row in cursor.fetchall()}

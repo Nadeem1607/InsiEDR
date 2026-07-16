@@ -59,7 +59,7 @@ def _pywintypes_to_local_naive(pywints_dt: Any) -> datetime:
     return pywints_dt.astimezone().replace(tzinfo=None)
 
 
-def _query_event_log(channel: str, event_ids: set[int], cutoff: datetime) -> list[UsbEvent]:
+def _query_event_log(channel: str, event_ids: set[int], hours_back: int = 24) -> list[UsbEvent]:
     events: list[UsbEvent] = []
     if not IS_WINDOWS:
         return events
@@ -68,6 +68,7 @@ def _query_event_log(channel: str, event_ids: set[int], cutoff: datetime) -> lis
     try:
         handle = win32evtlog.OpenEventLog(None, channel)
         flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+        cutoff = datetime.now() - timedelta(hours=hours_back)
         while True:
             batch = win32evtlog.ReadEventLog(handle, flags, 0)
             if not batch:
@@ -132,11 +133,12 @@ def _parse_usb_event_xml(xml_text: str, event_ids: set[int]) -> UsbEvent | None:
     return UsbEvent(event_id=event_id, timestamp=timestamp, device_id=device_id, lifetime_id=lifetime_id)
 
 
-def _query_modern_event_channel(channel: str, event_ids: set[int], cutoff: datetime) -> list[UsbEvent]:
+def _query_modern_event_channel(channel: str, event_ids: set[int], hours_back: int = 24) -> list[UsbEvent]:
     events: list[UsbEvent] = []
     if not IS_WINDOWS or not hasattr(win32evtlog, "EvtQuery"):
         return events
 
+    cutoff = datetime.now() - timedelta(hours=hours_back)
     query = "*[System[{}]]".format(" or ".join(f"EventID={event_id}" for event_id in sorted(event_ids)))
     handle = None
     try:
@@ -255,24 +257,27 @@ def _update_exfiltration_state(current_bytes: dict[str, int]) -> int:
 
     if state.get("date") != today:
         state["date"] = today
+        state["daily_total"] = 0
         state["last_counters"] = {}
 
     last_counters = state.setdefault("last_counters", {})
-    interval_delta = 0
+    daily_total = state.get("daily_total", 0)
 
     for drive, bytes_written in current_bytes.items():
         if drive in last_counters:
             delta = bytes_written - last_counters[drive]
             if delta > 0:
-                interval_delta += delta
+                daily_total += delta
         last_counters[drive] = bytes_written
+
+    state["daily_total"] = daily_total
 
     try:
         write_json_file(state_file, state)
     except Exception as exc:
         log.warning("Failed to save USB exfiltration state: %s", exc)
 
-    return interval_delta
+    return daily_total
 
 
 def _synthetic_raw_telemetry() -> dict[str, Any]:
@@ -292,36 +297,14 @@ def _synthetic_raw_telemetry() -> dict[str, Any]:
     }
 
 
-def _load_last_collection_time() -> datetime:
-    try:
-        path = default_state_dir() / "devices_collection_state.json"
-        if path.exists():
-            iso = read_json_file(path).get("last_collected_at")
-            if iso:
-                return datetime.fromisoformat(iso).astimezone().replace(tzinfo=None)
-    except Exception:
-        pass
-    return datetime.now() - timedelta(minutes=6)
-
-
-def _save_last_collection_time(dt: datetime) -> None:
-    try:
-        path = default_state_dir() / "devices_collection_state.json"
-        write_json_file(path, {"last_collected_at": dt.isoformat()})
-    except Exception:
-        pass
-
-
 def collect_raw_usb_telemetry() -> dict[str, Any]:
-    cutoff = _load_last_collection_time()
-
-    connects = _query_event_log("System", USB_CONNECT_EVENT_IDS, cutoff)
-    disconnects = _query_event_log("System", USB_DISCONNECT_EVENT_IDS, cutoff)
+    connects = _query_event_log("System", USB_CONNECT_EVENT_IDS)
+    disconnects = _query_event_log("System", USB_DISCONNECT_EVENT_IDS)
     for channel in USB_MODERN_CHANNELS:
-        modern_events = _query_modern_event_channel(channel, USB_CONNECT_EVENT_IDS | USB_DISCONNECT_EVENT_IDS, cutoff)
+        modern_events = _query_modern_event_channel(channel, USB_CONNECT_EVENT_IDS | USB_DISCONNECT_EVENT_IDS)
         connects.extend(event for event in modern_events if event.event_id in USB_CONNECT_EVENT_IDS)
         disconnects.extend(event for event in modern_events if event.event_id in USB_DISCONNECT_EVENT_IDS)
-    connects += _query_event_log("Security", {6416}, cutoff)
+    connects += _query_event_log("Security", {6416})
 
     connects = _dedupe_usb_events(connects)
     disconnects = _dedupe_usb_events(disconnects)
@@ -417,9 +400,6 @@ def derive_features(raw: dict[str, Any]) -> dict[str, Any]:
     else:
         features["_collector_quality"] = "heuristic"
     features["_feature_quality"] = feature_quality
-    
-    now_collection = datetime.now()
-    _save_last_collection_time(now_collection)
     return features
 
 
@@ -435,8 +415,8 @@ def collect() -> dict[str, Any]:
                 "_feature_quality": {key: "unsupported" for key in features},
             }
         )
-        return {"status": "unsupported", "payload": features}
-    return {"status": "success", "payload": derive_features(raw)}
+        return features
+    return derive_features(raw)
 
 
 def collect_features() -> dict[str, Any]:

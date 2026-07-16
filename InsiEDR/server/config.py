@@ -124,6 +124,20 @@ class ServerConfig:
         return os.environ.get("INSIEDR_MODEL_INFERENCE_DIR", ".")  # src/ and models/ live at repo root
 
     @property
+    def g_model_models_dir(self) -> str:
+        """
+        Resolves to the G-model's artifact directory (latest_data/models/).
+        All .pkl files are loaded from InsiEDR-G-model-latest-dataset IN-PLACE.
+        Nothing is copied or moved.
+        """
+        base = self.model_inference_dir
+        candidate = os.path.join(base, "latest_data", "models")
+        if os.path.isdir(candidate):
+            return candidate
+        # Fallback: if pointed at old-style layout where models/ sits at the root
+        return os.path.join(base, "models")
+
+    @property
     def fernet_key_env(self) -> str | None:
         return os.environ.get("INSIEDR_FERNET_KEY") or os.environ.get("FERNET_KEY")
 

@@ -79,11 +79,8 @@ class USNJournalMonitorCollector(BaseCollector):
             journal_id, first_usn, next_usn = struct.unpack("QQQ", query_buf[:24])
 
             state = self._load_state()
-            # If journal ID changed (e.g. journal re-created) or no state exists, reset bookmark to next_usn (current time) to avoid old logs
-            if state.get("journal_id") == journal_id and state.get("last_usn", 0) > 0:
-                start_usn = state.get("last_usn")
-            else:
-                start_usn = next_usn
+            # If journal ID changed (e.g. journal re-created), reset bookmark
+            start_usn = state.get("last_usn", 0) if state.get("journal_id") == journal_id else first_usn
             
             # Ensure start_usn is within current journal bounds
             if start_usn < first_usn:

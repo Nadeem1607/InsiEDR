@@ -1,0 +1,47 @@
+{
+  "dataset": "aalto_desktop_merged",
+  "seed": 42,
+  "gallery_size": 5,
+  "impostors_per_user": 200,
+  "max_genuine_queries_per_user": 30,
+  "checkpoint": "model/checkpoint.weights.h5",
+  "sequence_length": 100,
+  "input_features": 5,
+  "xv_users_total": 16859,
+  "xe_users_total": 16859,
+  "xv_users_used_for_scoring": 16859,
+  "xe_users_used_for_scoring": 16859,
+  "xv_scores": {
+    "genuine": 348788,
+    "impostor": 3371800
+  },
+  "xe_scores": {
+    "genuine": 348493,
+    "impostor": 3371800
+  },
+  "threshold_tuned_on_xv": 15.144432349642841,
+  "xv_eer": 0.003162244582389122,
+  "xv_far_at_xv_eer_thr": 0.0031535085117741267,
+  "xv_frr_at_xv_eer_thr": 0.0031709806530041173,
+  "xe_far_at_tuned_thr": 0.0031680408090634083,
+  "xe_frr_at_tuned_thr": 0.0031707953961772548,
+  "xe_hter_at_tuned_thr": 0.0031694181026203317,
+  "xe_tar_at_tuned_thr": 0.9968292046038227,
+  "xe_eer": 0.003174563943821108,
+  "xe_eer_threshold": 15.143479947210146,
+  "xe_far_at_xe_eer_thr": 0.00316685449908061,
+  "xe_frr_at_xe_eer_thr": 0.0031822733885616067,
+  "xe_eer_95ci": [
+    0.003094892851363711,
+    0.003255293764889288
+  ],
+  "xe_far_at_tuned_thr_95ci": [
+    0.003108725309923483,
+    0.0032318568717005754
+  ],
+  "xe_frr_at_tuned_thr_95ci": [
+    0.0029814085218354456,
+    0.0033601822705190635
+  ],
+  "bootstrap_iterations": 1000
+}

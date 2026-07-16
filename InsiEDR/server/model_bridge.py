@@ -13,9 +13,9 @@ from server.config import config
 REQUIRED_MODEL_ARTIFACTS = (
     "domain_isolation_forest.pkl",
     "feature_scaler.pkl",
-    "ridge_models.pkl",
+    "ridge_models.pkl",       # G-model: rvfl_ridge_models.pkl renamed/symlinked
+    "rvfl_model.pkl",         # G-model: frozen RandomLSTM weights
     "rvfl_metadata.json",
-    "feature_columns.json",
     "feature_columns_IF.json",
     "scenario_xgb.pkl",
     "scenario_xgb_features.json",
@@ -30,12 +30,8 @@ REQUIRED_MODEL_DEPENDENCIES = (
 )
 
 FEATURE_ALIASES = {
-    "after_hours_file_access": ("file_access_after_hours",),
-    "weekend_file_access": ("file_access_weekend",),
-    "first_file_access_time": ("first_file_activity_time", "first_file_open_time"),
-    "last_file_access_time": ("last_file_activity_time", "last_file_open_time"),
+    # --- Aliases kept: all map to G-model's 31 IF features ---
     "first_usb_usage_time": ("first_usb_time",),
-    "last_usb_usage_time": ("last_usb_time",),
     "daily_unique_filename_count": ("unique_filename_count",),
     "daily_new_filename_count": ("new_filename_count",),
     "daily_http_request_count": ("http_request_count", "http_count"),
@@ -45,6 +41,9 @@ FEATURE_ALIASES = {
     "daily_device_connect_count": ("usb_connect_count",),
     "daily_unique_pc_count": ("unique_pc_count",),
     "suspicious_url_count": ("watchlisted_url_count",),
+    # --- Removed aliases (G-model XGBoost was NOT trained on these) ---
+    # "after_hours_file_access", "weekend_file_access",
+    # "first/last_file_access_time", "last_usb_usage_time"
 }
 
 DOMAIN_RISK_FEATURES = {
@@ -68,7 +67,9 @@ class ModelBridge:
 
     def __init__(self, inference_dir: str | Path | None = None) -> None:
         self.inference_dir = Path(inference_dir or config.model_inference_dir).resolve()
-        self.models_dir = self.inference_dir / "models"
+        # G-model artifacts live at InsiEDR-G-model-latest-dataset/latest_data/models/
+        # Nothing is copied — we resolve the path in-place via config.g_model_models_dir.
+        self.models_dir = Path(config.g_model_models_dir).resolve()
         self._feature_columns: list[str] | None = None
         self._inference_module = None
 
@@ -232,8 +233,8 @@ class ModelBridge:
         from server.risk.aggregator import RiskAggregator
         from server.detectors.auth_burst_detector import AuthBurstDetector
         from server.detectors.zscore_detector import ZScoreDetector
-        from server.detectors.isolation_forest_detector import IsolationForestDetector
-        from server.detectors.random_forest_detector import RandomForestDetector
+        from server.detectors.advanced_pipeline_detector import AdvancedPipelineDetector
+        from server.detectors.tamper_detector import TamperDetector
 
         username = payload.get("username", "unknown")
         agent_id = payload.get("agent_id", "unknown")
@@ -244,7 +245,7 @@ class ModelBridge:
 
         # 0. Check for idle payload
         total_activity = sum(abs(v) for v in ordered_features.values())
-        if total_activity == 0.0:
+        if total_activity == 0.0 and not raw_features.get("manual_agent_stop_flag"):
             result = self._skipped(payload, "idle", "No activity recorded in payload (idle).")
             self._persist_model_output(storage, result)
             
@@ -280,15 +281,20 @@ class ModelBridge:
 
         # 2. Run Phase 2 Detectors against the pre-existing baseline
         detectors = [
+            TamperDetector(),
             AuthBurstDetector(),
             ZScoreDetector(),
-            IsolationForestDetector(),
-            RandomForestDetector(),
+            # AdvancedPipelineDetector replaces IsolationForestDetector + RandomForestDetector.
+            # It imports InferenceEngine directly from InsiEDR-G-model-latest-dataset/src/
+            # in-place — no code is copied or moved from that directory.
+            AdvancedPipelineDetector(),
         ]
         
         detector_results = []
         for detector in detectors:
-            res = detector.detect(payload_id, agent_id, username, ordered_features, user_baseline)
+            # storage is passed through so AdvancedPipelineDetector can query
+            # the 7-day rvfl_risk history needed for RedRVFL sequence scoring.
+            res = detector.detect(payload_id, agent_id, username, ordered_features, user_baseline, storage=storage)
             detector_results.append(res)
             
             # Persist each detector's output
@@ -305,6 +311,36 @@ class ModelBridge:
                 "reason_summary": res["reason"],
             }
             self._persist_model_output(storage, output)
+
+        # 2b. Run Keystroke Biometrics Detector (if telemetry available)
+        keystroke_timings = None
+        for collector in payload.get("collectors", []):
+            if isinstance(collector, dict) and collector.get("collector") == "keystroke-collector" and collector.get("status") == "success":
+                keystroke_timings = collector.get("payload", {}).get("keystroke_timings")
+                break
+                
+        if keystroke_timings:
+            try:
+                from server.detectors.keystroke_detector import evaluate_keystrokes
+                res = evaluate_keystrokes(keystroke_timings, username)
+                detector_results.append(res)
+                
+                output = {
+                    "payload_id": payload_id,
+                    "agent_id": agent_id,
+                    "username": username,
+                    "detector_name": res["detector_name"],
+                    "model_version": "v2",
+                    "score": res["score"],
+                    "confidence": res["confidence"],
+                    "is_anomaly": res["is_anomaly"],
+                    "feature_contributions_json": res["feature_contributions"],
+                    "reason_summary": res["reason"],
+                }
+                self._persist_model_output(storage, output)
+            except Exception as e:
+                import logging
+                logging.getLogger("model_bridge").error(f"Failed to process keystrokes: {e}")
 
         # 3. Aggregate Risk
         aggregator = RiskAggregator(storage)

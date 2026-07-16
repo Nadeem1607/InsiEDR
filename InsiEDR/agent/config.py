@@ -114,7 +114,7 @@ class AgentConfig:
     queue_dir: Path
     state_dir: Path = field(default_factory=default_state_dir)
     enabled_collectors: tuple[str, ...] = field(default_factory=lambda: DEFAULT_COLLECTORS)
-    interval_seconds: int = 10
+    interval_seconds: int = 300
     request_timeout_seconds: int = 10
     collector_timeout_seconds: int = 30
     queue_retry_limit: int = 25
@@ -195,7 +195,7 @@ class AgentConfig:
             state_dir=state_dir,
             queue_dir=queue_dir,
             enabled_collectors=_split_collectors(_env("INSIEDR_ENABLED_COLLECTORS")),
-            interval_seconds=_env_int("INSIEDR_COLLECTION_INTERVAL_SECONDS", 10),
+            interval_seconds=_env_int("INSIEDR_COLLECTION_INTERVAL_SECONDS", 300),
             request_timeout_seconds=_env_int("INSIEDR_REQUEST_TIMEOUT_SECONDS", 10),
             collector_timeout_seconds=_env_int("INSIEDR_COLLECTOR_TIMEOUT_SECONDS", 30),
             queue_retry_limit=_env_int("INSIEDR_QUEUE_RETRY_LIMIT", 25),

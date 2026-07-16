@@ -11,7 +11,7 @@ class AuthBurstDetector(Detector):
     def name(self) -> str:
         return "auth_burst"
 
-    def detect(self, payload_id: str, agent_id: str, username: str, features: Dict[str, float], baseline: Any) -> Dict[str, Any]:
+    def detect(self, payload_id: str, agent_id: str, username: str, features: Dict[str, float], baseline: Any, storage: Any = None) -> Dict[str, Any]:
         result = {
             "detector_name": self.name,
             "score": 0.0,

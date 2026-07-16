@@ -1,0 +1,59 @@
+================================================================================
+INSIDER THREAT CHECK — USER: U0430
+WHAT THIS TOOL DOES: Analyzes daily endpoint logs to detect abnormal user behavior 
+and classifies potential insider threat paths using a three-tier model pipeline.
+================================================================================
+
+STAGE 1: DAILY ANOMALY SCORE (Isolation Forest)
+Checks each day's behavior against what's normal for this user population.
+
+| Date       | Domain Scores (L:Logon, F:File, D:Device, H:HTTP) | Overall Risk | Risk Tier |
+| :---       | :---                                              | :---:        | :---:     |
+| 2024-01-01 | L:0.4273 F:0.5424 D:0.4607 H:0.5934 | 0.6931 | MEDIUM |
+| 2024-01-02 | L:0.4563 F:0.5142 D:0.4607 H:0.3764 | 0.6190 | MEDIUM |
+| 2024-01-03 | L:0.4858 F:0.5015 D:0.4607 H:0.3858 | 0.6280 | MEDIUM |
+| 2024-01-04 | L:0.3709 F:0.5458 D:0.4607 H:0.3978 | 0.6079 | MEDIUM |
+| 2024-01-05 | L:0.4043 F:0.5270 D:0.4607 H:0.3732 | 0.6045 | MEDIUM |
+| ...        | ...                                                 | ...    | ...      |
+| 2024-03-27 | L:0.3964 F:0.7461 D:0.4607 H:0.7025 | 0.7896 | MEDIUM |
+| 2024-03-28 | L:0.3856 F:0.7651 D:0.4607 H:0.7585 | 0.8116 | HIGH |
+| 2024-03-29 | L:0.4576 F:0.7839 D:0.4607 H:0.7767 | 0.8489 | HIGH |
+| 2024-03-30 | L:0.6398 F:0.6304 D:0.4607 H:0.7859 | 0.8619 | HIGH |
+| 2024-03-31 | L:0.7166 F:0.7270 D:0.4607 H:0.7761 | 0.9180 | HIGH |
+
+STAGE 2: THREAT TYPE CLASSIFICATION (XGBoost)
+Predicts which of 6 categories each day's behavior resembles.
+
+| Date       | Predicted Class   | Confidence |
+| :---       | :---              | :---:      |
+| 2024-01-01 | normal          | 100.00% |
+| 2024-01-02 | normal          | 100.00% |
+| 2024-01-03 | normal          | 100.00% |
+| 2024-01-04 | normal          | 100.00% |
+| 2024-01-05 | normal          | 100.00% |
+| ...        | ...             | ...    |
+| 2024-03-27 | cloud_exfil     | 100.00% |
+| 2024-03-28 | cloud_exfil     | 100.00% |
+| 2024-03-29 | cloud_exfil     | 100.00% |
+| 2024-03-30 | cloud_exfil     | 100.00% |
+| 2024-03-31 | flight_risk     | 99.99% |
+
+STAGE 3: BEHAVIORAL DRIFT OVER TIME (RedRVFL)
+Looks at the pattern across days, not just single days.
+
+Sequence length: 76 days | Drift error (MSE): 0.028778 | Final risk score: 0.206403
+
+FINAL VERDICT
+
+This user ranks #2 out of 200 test users. Top-10 threshold: 0.042845
+
+VERDICT: FLAGGED FOR REVIEW
+Ground truth (verification only, not used in scoring): Insider - cloud_exfil
+Model verdict matches ground truth: YES
+
+HOW TO READ THIS
+
+A single HIGH day alone does not mean insider — Stage 3's pattern-over-time is the real signal.
+This model was trained using only each insider's final 10 active days as positive
+examples; performance on subtle/early-stage behavior has not been separately validated.
+================================================================================

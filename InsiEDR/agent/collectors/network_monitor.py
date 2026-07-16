@@ -11,7 +11,6 @@ except ImportError:
     psutil = None
 
 from agent.collectors.base import BaseCollector, CollectorResult
-from agent.state import default_state_dir, read_json_file, write_json_file
 
 log = logging.getLogger("network_monitor")
 
@@ -125,43 +124,6 @@ class NetworkMonitor(BaseCollector):
             )
         return summaries
 
-    def _get_counter_deltas(self, current: Any) -> dict[str, int]:
-        state_file = default_state_dir() / "network_monitor_state.json"
-        state = {}
-        try:
-            if state_file.exists():
-                state = read_json_file(state_file)
-        except Exception:
-            pass
-
-        last = state.get("last_counters", {})
-        
-        current_dict = {
-            "bytes_sent": current.bytes_sent, "bytes_recv": current.bytes_recv,
-            "packets_sent": current.packets_sent, "packets_recv": current.packets_recv,
-            "errin": current.errin, "errout": current.errout,
-            "dropin": current.dropin, "dropout": current.dropout
-        }
-        
-        try:
-            write_json_file(state_file, {"last_counters": current_dict})
-        except Exception:
-            pass
-
-        if not last:
-            return {k: 0 for k in current_dict.keys()}
-            
-        return {
-            "bytes_sent": max(0, current.bytes_sent - last.get("bytes_sent", current.bytes_sent)),
-            "bytes_recv": max(0, current.bytes_recv - last.get("bytes_recv", current.bytes_recv)),
-            "packets_sent": max(0, current.packets_sent - last.get("packets_sent", current.packets_sent)),
-            "packets_recv": max(0, current.packets_recv - last.get("packets_recv", current.packets_recv)),
-            "errin": max(0, current.errin - last.get("errin", current.errin)),
-            "errout": max(0, current.errout - last.get("errout", current.errout)),
-            "dropin": max(0, current.dropin - last.get("dropin", current.dropin)),
-            "dropout": max(0, current.dropout - last.get("dropout", current.dropout))
-        }
-
     def collect(self, context: Mapping[str, Any] | None = None) -> CollectorResult:
         """Collect passive local network counters without packet capture or classification."""
         if psutil is None:
@@ -169,7 +131,6 @@ class NetworkMonitor(BaseCollector):
             
         try:
             total = psutil.net_io_counters()
-            deltas = self._get_counter_deltas(total)
             interfaces = self._interface_summaries()
             connections = self._safe_net_connections()
             features: dict[str, Any] = {
@@ -177,14 +138,14 @@ class NetworkMonitor(BaseCollector):
                 "hostname": socket.gethostname(),
                 "network_interface_count": len(interfaces),
                 "network_interfaces_up_count": sum(1 for item in interfaces if item["is_up"]),
-                "network_bytes_sent": deltas["bytes_sent"],
-                "network_bytes_recv": deltas["bytes_recv"],
-                "network_packets_sent": deltas["packets_sent"],
-                "network_packets_recv": deltas["packets_recv"],
-                "network_errors_in": deltas["errin"],
-                "network_errors_out": deltas["errout"],
-                "network_dropin": deltas["dropin"],
-                "network_dropout": deltas["dropout"],
+                "network_bytes_sent": int(total.bytes_sent),
+                "network_bytes_recv": int(total.bytes_recv),
+                "network_packets_sent": int(total.packets_sent),
+                "network_packets_recv": int(total.packets_recv),
+                "network_errors_in": int(total.errin),
+                "network_errors_out": int(total.errout),
+                "network_dropin": int(total.dropin),
+                "network_dropout": int(total.dropout),
                 "network_interfaces": interfaces,
             }
             features.update(self._connection_counts(connections))

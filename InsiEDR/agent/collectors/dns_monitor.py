@@ -53,42 +53,19 @@ class DNSMonitorCollector(BaseCollector):
         except Exception:
             return None
 
-    def _load_bookmark(self) -> int:
-        from agent.state import default_state_dir, read_json_file
-        bookmark_file = default_state_dir() / "dns_monitor_bookmark.json"
-        try:
-            if bookmark_file.exists():
-                return int(read_json_file(bookmark_file).get("last_record_number", 0))
-        except Exception:
-            pass
-        return 0
-
-    def _save_bookmark(self, record_number: int) -> None:
-        from agent.state import default_state_dir, write_json_file
-        bookmark_file = default_state_dir() / "dns_monitor_bookmark.json"
-        try:
-            write_json_file(bookmark_file, {
-                "last_record_number": record_number,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            })
-        except Exception:
-            pass
-
     def collect(self, context: Mapping[str, Any] | None = None) -> CollectorResult:
         if platform.system() != "Windows" or win32evtlog is None:
             return self.unsupported("DNS monitor requires Windows with pywin32.")
 
         try:
-            bookmark = self._load_bookmark()
-            max_record = bookmark
-            
-            # Query ONLY new DNS activity within the last 5 minutes to completely block old logs
-            query = f"*[System[EventID=3008 and EventRecordID > {bookmark} and TimeCreated[timediff(@SystemTime) <= 300000]]]"
+            # Query last 1 hour of DNS activity
+            query = "*[System[EventID=3008]]"
             handle = win32evtlog.EvtQuery(self.channel, win32evtlog.EvtQueryReverseDirection, query)
             
             queries = []
             seen_queries = set()
             
+            # We limit the number of events to prevent payload bloat
             count = 0
             while count < 500:
                 events = win32evtlog.EvtNext(handle, 10)
@@ -97,22 +74,11 @@ class DNSMonitorCollector(BaseCollector):
                 
                 for event in events:
                     xml = win32evtlog.EvtRender(event, win32evtlog.EvtRenderEventXml)
-                    
-                    # Extract EventRecordID to update the bookmark
-                    root = ET.fromstring(xml)
-                    ns = {"e": "http://schemas.microsoft.com/win/2004/08/events/event"}
-                    record_node = root.find(".//e:System/e:EventRecordID", namespaces=ns)
-                    rec_id = int(record_node.text) if record_node is not None else 0
-                    if rec_id > max_record:
-                        max_record = rec_id
-                    
                     parsed = self._parse_dns_event(xml)
                     if parsed and parsed["query"]:
                         queries.append(parsed)
                         seen_queries.add(parsed["query"].lower())
                     count += 1
-            
-            self._save_bookmark(max_record)
             
             payload = {
                 "dns_queries": queries[:100], # Detailed sample

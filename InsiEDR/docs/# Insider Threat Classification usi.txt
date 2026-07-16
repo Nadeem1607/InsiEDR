@@ -1,0 +1,80 @@
+# Insider Threat Classification using the CERT Dataset
+## Final Implementation Plan & Documentation
+
+This document describes the 3-Phase Machine Learning pipeline implemented to classify users as insider threats (or not) using the CERT dataset.
+
+---
+
+## Phase 1: Ingestion, Feature Engineering & Preprocessing
+
+### Objective
+Load raw activity records from the CERT dataset, extract user behavioral indicators, handle missing values, and convert them to normalized numerical scores.
+
+### Implementation Details
+- **Data Loading:** Efficiently loads event logs from the CERT CSV files (`logon.csv`, `device.csv`, `file.csv`, and `http.csv`).
+- **Feature Extraction:**
+  - **Logon Domain:** Computes total logon frequency and counts after-hours logons (events occurring between 18:00 and 07:00).
+  - **Device (USB) Domain:** Tracks USB connect actions and counts after-hours device plug-ins.
+  - **File Domain:** Computes the total frequency of filesystem interactions.
+  - **HTTP Domain:** Captures web traffic volumes and flags visits to job-searching sites (e.g., indeed.com, monster.com).
+- **Numerical Scaling:** Normalizes raw feature counts into a consistent `0–100` risk scale using min-max normalization.
+- **Output:** Saves the processed feature scores to `server/pipeline/data/phase1_scores.csv` containing columns:
+  - `user_id`
+  - `timestamp`
+  - `file_risk_score`
+  - `logon_risk_score`
+  - `http_risk_score`
+  - `usb_risk_score`
+
+---
+
+## Phase 2: Risk Scoring & Aggregation Formula
+
+### Objective
+Combine individual domain risk scores into a composite user-level overall risk score and classify them into categorical levels.
+
+### Implementation Details
+- **Aggregation Formula:** Uses a weighted risk score prioritizing critical exfiltration pathways:
+  $$\text{Overall Risk Score} = 0.35 \times \text{File Risk} + 0.35 \times \text{USB Risk} + 0.15 \times \text{Logon Risk} + 0.15 \times \text{HTTP Risk}$$
+- **Risk Level Classification:**
+  - **Normal:** Score $< 40$
+  - **Medium:** Score $\ge 40$ and $< 75$
+  - **High:** Score $\ge 75$
+- **Output:** Saves the aggregated results to `server/pipeline/data/phase2_classified.csv`.
+
+---
+
+## Phase 3: Machine Learning Anomaly Detection & Explainability
+
+### Objective
+Train a machine learning classifier on the numerical risk vectors to identify outliers (insiders) and generate human-readable explanations.
+
+### Implementation Details
+- **Model Choice:** An unsupervised **Isolation Forest** classifier (`sklearn.ensemble.IsolationForest`) with $5\%$ contamination rate.
+- **Explainability Logic:** For each user flagged as an insider, the model calculates the positive deviation of each domain score against the user population average:
+  $$\text{Deviation} = \text{User Score} - \text{Population Average}$$
+  The domain with the largest positive deviation is cited as the primary reason for classification.
+- **Output:** Saves results to `server/pipeline/data/phase3_results.csv` with columns:
+  - `user_id`
+  - `timestamp`
+  - `overall_risk_score`
+  - `anomaly_score`
+  - `is_insider`
+  - `reason`
+
+---
+
+## How to Run the Pipeline
+
+Run the scripts in sequence from the workspace root:
+
+```powershell
+# Phase 1: Preprocess and extract numerical features
+python server/pipeline/phase1_collector.py
+
+# Phase 2: Calculate composite risk scores
+python server/pipeline/phase2_classifier.py
+
+# Phase 3: Run ML anomaly classification and generate reasons
+python server/pipeline/phase3_ml_detector.py
+```

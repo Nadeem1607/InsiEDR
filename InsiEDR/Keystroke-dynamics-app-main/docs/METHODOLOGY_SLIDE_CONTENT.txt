@@ -1,0 +1,24 @@
+# METHODOLOGY SLIDE: The Dual-Gate Architecture
+
+## 1. Feature Representation (The Input)
+- **Signal Extraction:** Captured raw Holtime (HT) and Flight-time (FT) vectors with Microsecond precision.
+- **Normalization:** Min-Max scaling of temporal features to handle variances in global keyboard sampling rates.
+- **Augmentation:** Synthetic jitter injection during training to simulate physical fatigue and varied environmental conditions.
+
+## 2. Gate 1: Non-Stationary Anomaly Detection (AI Defense)
+- **Heuristic Engine:** Analyzes the 'Rhythm Velocity' of the input sequence.
+- **Anomaly Logic:** Detects zero-variance flight times (programmatic pastes) and superhuman average speeds (bot scripts).
+- **Security Goal:** Immediate session termination if a non-biological typing signature is detected.
+
+## 3. Gate 2: Deep Metric Learning (Biometric Target)
+- **Model Architecture:** **Type2Branch** (Shared-Weight deep network).
+  - **Conv1D Layers:** Extract short-term local bigram/trigram patterns.
+  - **Bi-LSTM Layers:** Captures long-term sequential dependencies (rhythm over the full 100-key buffer).
+- **Core Strategy:** **Contrastive Triplet Learning**.
+  - Minimizes distance between 'Anchor' and 'Positive' (Genuine User).
+  - Maximizes distance between 'Anchor' and 'Negative' (Impostors/Random Users).
+
+## 4. Verification & Backend Integration
+- **Distance Metric:** Euclidean (L2) distance calculation in a 128-dimension hypersphere.
+- **Calibrated Decision:** Comparison against a static threshold (15.14) derived from EER optimization.
+- **Continuous Monitoring:** Every 100 keystrokes re-triggers the full Dual-Gate pipeline for transparent background security.

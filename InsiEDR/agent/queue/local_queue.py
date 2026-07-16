@@ -95,7 +95,15 @@ class LocalEncryptedQueue:
                 self._validate_envelope(body["envelope"])
             except Exception as exc:
                 log.warning("ignoring corrupt queue file %s: %s", path.name, exc)
-                self._move_to_dead_letter(path, reason="invalid")
+                try:
+                    import uuid as _uuid
+                    dead_path = self.dead_letter_dir / f"{path.name}.invalid-{_uuid.uuid4().hex}"
+                    path.replace(dead_path)
+                except OSError:
+                    try:
+                        path.unlink()
+                    except OSError:
+                        pass
                 continue
             yielded += 1
             yield QueueItem(path=path, body=body)
@@ -140,31 +148,36 @@ class LocalEncryptedQueue:
             raise ValueError("encrypted envelope is missing nonce or ciphertext")
 
     def _expire_old_items(self) -> None:
-        cutoff_str = (datetime.now(timezone.utc) - timedelta(days=self.max_age_days)).strftime("%Y%m%dT%H%M%S")
+        cutoff = datetime.now(timezone.utc) - timedelta(days=self.max_age_days)
+        # 1. Expire active queue items
         for path in sorted(self.queue_dir.glob(f"*{self.suffix}")):
-            # Extract the 15-character timestamp prefix (%Y%m%dT%H%M%S) from the filename
-            # and use lexicographical string comparison to bypass expensive JSON parsing.
-            if path.name[:15] < cutoff_str:
-                self._move_to_dead_letter(path, reason="expired")
+            try:
+                with path.open("r", encoding="utf-8") as fh:
+                    body = json.load(fh)
+                created_at = datetime.fromisoformat(str(body["created_at"]).replace("Z", "+00:00"))
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+                if created_at < cutoff:
+                    self._move_to_dead_letter(path, reason="expired")
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+                
+        # 2. Prune dead letter directory to prevent infinite disk exhaustion
+        cutoff_timestamp = cutoff.timestamp()
+        for path in self.dead_letter_dir.iterdir():
+            if not path.is_file():
+                continue
+            try:
+                if path.stat().st_mtime < cutoff_timestamp:
+                    path.unlink()
+            except OSError:
+                pass
 
     def _enforce_bounds(self) -> None:
         self._expire_old_items()
-        
-        # Compute sizes exactly once to avoid O(N^2) I/O bottleneck
-        paths_with_size = []
-        total_bytes = 0
-        for p in sorted(self.queue_dir.glob(f"*{self.suffix}")):
-            try:
-                size = p.stat().st_size
-                paths_with_size.append((p, size))
-                total_bytes += size
-            except OSError:
-                continue
-
-        while len(paths_with_size) > self.max_items or total_bytes > self.max_bytes:
-            p, size = paths_with_size.pop(0)
-            self._move_to_dead_letter(p, reason="queue_limit")
-            total_bytes -= size
+        paths = sorted(self.queue_dir.glob(f"*{self.suffix}"))
+        while len(paths) > self.max_items or self.disk_usage_bytes() > self.max_bytes:
+            self._move_to_dead_letter(paths.pop(0), reason="queue_limit")
 
     def _move_to_dead_letter(self, path: Path, *, reason: str) -> Path:
         safe_reason = "".join(char if char.isalnum() or char in "-_" else "_" for char in reason)

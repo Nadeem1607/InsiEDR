@@ -116,7 +116,10 @@ class DecoyMonitorCollector(BaseCollector):
         payload = {
             "monitored_decoys": [str(p) for p in self.decoy_paths],
             "events": events,
-            "events_recorded": len(events) > 0
+            "events_recorded": len(events) > 0,
+            # Tamper detection contract keys (no scoring terminology)
+            "threat_triggered": len(events) > 0,
+            "threat_events": events,
         }
         
         # Use exact quality

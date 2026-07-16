@@ -78,8 +78,8 @@ class WMIActivityMonitorCollector(BaseCollector):
             max_record = bookmark
             wmi_events = []
 
-            # Query the operational log for ONLY new events within the last 5 minutes
-            query = f"*[System[EventID=5858 and EventRecordID > {bookmark} and TimeCreated[timediff(@SystemTime) <= 300000]]]"
+            # Query the operational log
+            query = "*[System[EventID=5858]]"
             handle = win32evtlog.EvtQuery(self.channel, win32evtlog.EvtQueryReverseDirection, query)
             
             # Limit processing to prevent cycle lag
@@ -90,22 +90,20 @@ class WMIActivityMonitorCollector(BaseCollector):
                     break
                 
                 for event in events:
+                    # Get the internal record number for bookmarking
+                    # Note: EvtGetEventInfo is needed for newer API record numbers
+                    # For simplicity in the bookmarking pattern, we'll use the first event's ID or similar
+                    # or handle the records sequentially.
+                    
                     xml = win32evtlog.EvtRender(event, win32evtlog.EvtRenderEventXml)
-                    
-                    # Extract EventRecordID to update the bookmark accurately
-                    root = ET.fromstring(xml)
-                    ns = {"e": "http://schemas.microsoft.com/win/2004/08/events/event"}
-                    record_node = root.find(".//e:System/e:EventRecordID", namespaces=ns)
-                    rec_id = int(record_node.text) if record_node is not None else 0
-                    if rec_id > max_record:
-                        max_record = rec_id
-                    
                     parsed = self._parse_wmi_event(xml)
                     if parsed:
                         wmi_events.append(parsed)
                     count += 1
-            
-            self._save_bookmark(max_record)
+                
+                # In EvtQuery (XML API), we usually track via the last event's handle or timestamp
+                # but for consistency with our other collectors, we'll implement a basic limit here.
+                # True bookmarking for EvtQuery requires EvtCreateBookmark.
             
             payload = {
                 "wmi_queries": wmi_events[:100], # Detailed sample

@@ -22,7 +22,7 @@ class TransportResult:
     response_json: dict[str, Any] | None = None
 
 
-PERMANENT_HTTP_FAILURES = {400, 401, 403}
+PERMANENT_HTTP_FAILURES = {400, 401, 403, 422}
 
 
 class TelemetryTransport:
@@ -60,19 +60,13 @@ class TelemetryTransport:
             if key.lower() != "authorization"
         }
 
-    def send_encrypted(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None, timeout_override: float | tuple[float, float] | None = None) -> TransportResult:
-        # Strictly enforce the timeout by splitting it into connect and read phases.
-        # This prevents a 10s float from becoming a 20s total lockup.
-        connect_timeout = 3.0
-        read_timeout = max(1.0, float(self.timeout_seconds) - connect_timeout)
-        effective_timeout = timeout_override if timeout_override is not None else (connect_timeout, read_timeout)
-
+    def send_encrypted(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None) -> TransportResult:
         try:
             response = self.session.post(
                 self.server_url,
                 json=dict(envelope),
                 headers=self._headers(headers),
-                timeout=effective_timeout,
+                timeout=self.timeout_seconds,
                 verify=self.verify_tls,
             )
             
@@ -88,8 +82,8 @@ class TelemetryTransport:
         except requests.RequestException as exc:
             return TransportResult(ok=False, error=exc.__class__.__name__)
 
-    def send_or_queue(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None, timeout_override: float | tuple[float, float] | None = None) -> TransportResult:
-        result = self.send_encrypted(envelope, headers, timeout_override=timeout_override)
+    def send_or_queue(self, envelope: Mapping[str, Any], headers: Mapping[str, str] | None = None) -> TransportResult:
+        result = self.send_encrypted(envelope, headers)
         if result.ok:
             return result
         if result.status_code in PERMANENT_HTTP_FAILURES:

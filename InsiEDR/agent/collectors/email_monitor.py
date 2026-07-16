@@ -7,11 +7,10 @@ import shutil
 import sqlite3
 import sys
 import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from agent.collectors.base import BaseCollector, CollectorResult
-from agent.state import default_state_dir, read_json_file, write_json_file
 
 log = logging.getLogger(__name__)
 
@@ -33,24 +32,6 @@ class EmailMonitorCollector(BaseCollector):
 
     def __init__(self, *, hostname: str | None = None, timeout_seconds: int = 30) -> None:
         super().__init__(hostname=hostname, timeout_seconds=timeout_seconds)
-
-    def _load_last_collection_time(self) -> datetime:
-        try:
-            path = default_state_dir() / "email_collection_state.json"
-            if path.exists():
-                iso = read_json_file(path).get("last_collected_at")
-                if iso:
-                    return datetime.fromisoformat(iso).astimezone()
-        except Exception:
-            pass
-        return datetime.now().astimezone() - timedelta(minutes=6)
-
-    def _save_last_collection_time(self, dt: datetime) -> None:
-        try:
-            path = default_state_dir() / "email_collection_state.json"
-            write_json_file(path, {"last_collected_at": dt.isoformat()})
-        except Exception:
-            pass
 
     def _safe_copy(self, src: str) -> str | None:
         """Securely copy a locked database to a temporary location."""
@@ -121,9 +102,9 @@ class EmailMonitorCollector(BaseCollector):
             daily_emails_sent = 0
             emails_to_external = 0
             large_attachment_count = 0
+            raw_emails = []
             
-            last_collection = self._load_last_collection_time()
-            now_collection = datetime.now().astimezone()
+            today = datetime.now(timezone.utc).date()
 
             for db_path in db_paths:
                 tmp_db = self._safe_copy(db_path)
@@ -145,29 +126,55 @@ class EmailMonitorCollector(BaseCollector):
                         # Use folderLocations to reliably identify sent emails if available
                         if 'folderLocations' in tables:
                             query = """
-                                SELECT m.date, m.recipients 
+                                SELECT m.date, m.author, m.recipients, m.subject, m.body
                                 FROM messages m
                                 JOIN folderLocations f ON m.folderID = f.id
                                 WHERE f.folderURI LIKE '%Sent%' OR f.folderURI LIKE '%Outbox%'
                             """
                         else:
                             # Fallback if folderLocations doesn't exist
-                            query = "SELECT date, recipients FROM messages"
+                            query = "SELECT date, author, recipients, subject, body FROM messages"
                             
-                        # Query date and recipients. Ignore subject and body for privacy.
-                        cur.execute(query)
+                        # Query all raw fields for telemetry.
+                        try:
+                            cur.execute(query)
+                        except sqlite3.OperationalError:
+                            # Fallback if body is missing in older schemas
+                            query = query.replace("m.body", "null as body").replace("body FROM", "null as body FROM")
+                            try:
+                                cur.execute(query)
+                            except sqlite3.OperationalError:
+                                # Fallback to original minimal query
+                                if 'folderLocations' in tables:
+                                    query = "SELECT m.date, null, m.recipients, null, null FROM messages m JOIN folderLocations f ON m.folderID = f.id WHERE f.folderURI LIKE '%Sent%' OR f.folderURI LIKE '%Outbox%'"
+                                else:
+                                    query = "SELECT date, null, recipients, null, null FROM messages"
+                                cur.execute(query)
+
                         for row in cur.fetchall():
                             timestamp_micros = row[0]
-                            recipients_raw = row[1]
+                            author = row[1]
+                            recipients_raw = row[2]
+                            subject = row[3]
+                            body = row[4]
                             
                             if not timestamp_micros:
                                 continue
                                 
                             try:
                                 # Thunderbird uses PRTime (microseconds since epoch)
-                                msg_time = datetime.fromtimestamp(timestamp_micros / 1000000.0, tz=timezone.utc).astimezone()
-                                if msg_time > last_collection:
+                                msg_date = datetime.fromtimestamp(timestamp_micros / 1000000.0, tz=timezone.utc).date()
+                                if msg_date == today:
                                     daily_emails_sent += 1
+                                    
+                                    email_event = {
+                                        "timestamp": datetime.fromtimestamp(timestamp_micros / 1000000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+                                        "author": author if author else "",
+                                        "recipients": recipients_raw if recipients_raw else "",
+                                        "subject": subject if subject else "",
+                                        "body_preview": (body[:500] + "...") if body and len(body) > 500 else (body if body else "")
+                                    }
+                                    raw_emails.append(email_event)
                                     
                                     if recipients_raw:
                                         emails = EMAIL_REGEX.findall(recipients_raw)
@@ -201,12 +208,11 @@ class EmailMonitorCollector(BaseCollector):
                     except OSError:
                         pass
                         
-            self._save_last_collection_time(now_collection)
-
             payload = {
                 "daily_emails_sent": daily_emails_sent,
                 "emails_to_external_domains": emails_to_external,
-                "large_attachment_count": large_attachment_count
+                "large_attachment_count": large_attachment_count,
+                "raw_emails": raw_emails
             }
             
             # If we only found Outlook files but couldn't parse them passively, report heuristic 0s

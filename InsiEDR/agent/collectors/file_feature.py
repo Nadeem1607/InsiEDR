@@ -269,18 +269,13 @@ def _aggregate_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     archive_sizes: dict[str, int] = {}
     archive_exts = {".zip", ".rar", ".7z", ".tar", ".gz", ".iso"}
 
-    now_safe = datetime.now(timezone.utc)
     for event in events:
         op = str(event.get("op", ""))
         path = str(event.get("path", ""))
         size = int(event.get("size", 0) or 0)
         ts = event.get("ts")
         if not isinstance(ts, datetime):
-            ts = now_safe
-            
-        # SAFER SIDE: Ignore events older than 10 minutes (600 seconds)
-        if (now_safe - ts).total_seconds() > 600:
-            continue
+            ts = datetime.now(timezone.utc)
 
         lowered = path.lower()
         path_access[path] += 1
@@ -418,7 +413,7 @@ def validate_data(features: dict[str, Any]) -> list[str]:
 
 
 def collect() -> dict[str, Any]:
-    return {"status": "success", "payload": collect_file_features()}
+    return collect_file_features()
 
 
 def collect_features() -> dict[str, Any]:

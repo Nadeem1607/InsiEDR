@@ -226,9 +226,17 @@ class PythonModuleCollector(BaseCollector):
             module = self._load_module()
             payload = self._call_module(module)
             payload_data = dict(payload)
-            status = str(payload_data.pop("_collector_status", "success"))
-            quality = str(payload_data.pop("_collector_quality", "exact"))
-            feature_quality = payload_data.pop("_feature_quality", None)
+            
+            if "status" in payload_data and "payload" in payload_data and "collector" in payload_data:
+                status = str(payload_data.pop("status", "success"))
+                quality = str(payload_data.pop("quality", "exact"))
+                feature_quality = payload_data.pop("feature_quality", None)
+                payload_data = payload_data.get("payload") or {}
+            else:
+                status = str(payload_data.pop("_collector_status", "success"))
+                quality = str(payload_data.pop("_collector_quality", "exact"))
+                feature_quality = payload_data.pop("_feature_quality", None)
+                
             if status == "unsupported":
                 return self.unsupported(
                     str(payload_data.pop("_collector_message", "collector is unsupported")),

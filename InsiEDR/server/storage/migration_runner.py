@@ -53,8 +53,18 @@ def run_sql_script(connection, sql_text: str) -> int:
         for statement in split_sql_statements(sql_text):
             if not is_sqlite:
                 statement = statement.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
-            cursor.execute(statement)
-            count += 1
+            
+            if not statement.strip():
+                continue
+                
+            try:
+                cursor.execute(statement)
+                count += 1
+            except Exception as e:
+                # psycopg2 raises ProgrammingError for statements that only contain comments
+                if "empty query" in str(e).lower():
+                    continue
+                raise
         connection.commit()
     except Exception:
         connection.rollback()

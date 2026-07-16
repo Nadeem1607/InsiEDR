@@ -21,11 +21,14 @@ echo [INFO] Sending shutdown signal to Agent_Windows.exe...
 echo [INFO] The agent will intercept this, fire its tamper payload to the SIEM, and safely exit.
 echo.
 
+:: Ensure the directory exists before writing the signal file
+if not exist "%PROGRAMDATA%\InsiEDR" mkdir "%PROGRAMDATA%\InsiEDR"
+
 :: Create a stop signal file for the agent to detect in the default state directory
 echo STOP > "%PROGRAMDATA%\InsiEDR\stop.signal"
 
-:: Give the agent 3 seconds to process the signal and fire the tamper payload
-timeout /t 3 /nobreak >nul
+:: Give the agent 5 seconds to process the signal and fire the tamper payload
+timeout /t 5 /nobreak >nul
 
 :: Forcefully terminate the agent to ensure it is completely stopped
 taskkill /F /IM Agent_Windows.exe >nul 2>&1

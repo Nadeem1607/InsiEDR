@@ -155,15 +155,6 @@ def collect_auth_events(lookback_seconds):
     try:
         handle = win32evtlog.OpenEventLog(server, log_type)
         flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
-        if bookmark == 0:
-            try:
-                latest = win32evtlog.ReadEventLog(handle, flags, 0)
-                if latest:
-                    bookmark = latest[0].RecordNumber
-                    max_record = bookmark
-                    _save_bookmark(bookmark)
-            except Exception:
-                pass
         scanned = 0
 
         while scanned < CONFIG["MAX_EVENTS_SCAN"]:
@@ -194,9 +185,7 @@ def collect_auth_events(lookback_seconds):
                 
                 # Apply bookmark filter
                 if ev.RecordNumber <= bookmark:
-                    # Since we read backwards, all subsequent records in the handle are older. Stop entirely.
-                    scanned = CONFIG["MAX_EVENTS_SCAN"]
-                    break
+                    continue
 
                 parsed = _parse_event_strings(ev)
                 parsed.update({

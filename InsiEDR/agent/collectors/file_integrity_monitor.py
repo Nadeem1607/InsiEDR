@@ -95,18 +95,9 @@ class FileIntegrityMonitorCollector(BaseCollector):
             return self.unsupported("watchdog library is not installed.")
 
         events = []
-        now_utc = datetime.now(timezone.utc)
         while not self._event_queue.empty():
             try:
-                event = self._event_queue.get_nowait()
-                # SAFER SIDE: Skip events older than 10 minutes
-                try:
-                    ts = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00"))
-                    if (now_utc - ts).total_seconds() > 600:
-                        continue
-                except Exception:
-                    pass
-                events.append(event)
+                events.append(self._event_queue.get_nowait())
             except queue.Empty:
                 break
             if len(events) >= 100: break

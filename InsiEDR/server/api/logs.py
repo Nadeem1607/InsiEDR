@@ -32,10 +32,17 @@ def get_logs():
         "start_time": request.args.get("start_time"),
         "end_time": request.args.get("end_time"),
     }
-    try:
-        logs = storage.list_logs(limit=limit, offset=offset, **{k: v for k, v in filters.items() if v})
-    except TypeError:
-        logs = storage.list_logs(limit=limit, offset=offset)
+    import inspect
+    sig = inspect.signature(storage.list_logs)
+    
+    # Only pass filters that the storage adapter explicitly accepts, or if it accepts **kwargs
+    accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+    valid_filters = {
+        k: v for k, v in filters.items() 
+        if v and (accepts_kwargs or k in sig.parameters)
+    }
+    
+    logs = storage.list_logs(limit=limit, offset=offset, **valid_filters)
     return jsonify({"ok": True, "logs": logs})
 
 @bp.route("/telemetry", methods=["GET"])
@@ -46,8 +53,9 @@ def get_telemetry():
     limit = int(request.args.get("limit", 100))
     offset = int(request.args.get("offset", 0))
     collector = request.args.get("collector")
+    username = request.args.get("username")
     try:
-        telemetry = storage.list_collector_results(limit=limit, offset=offset, collector=collector)
+        telemetry = storage.list_collector_results(limit=limit, offset=offset, collector=collector, username=username)
     except AttributeError:
         return jsonify({"ok": False, "error": "storage method not implemented", "telemetry": []}), 501
     return jsonify({"ok": True, "logs": telemetry})

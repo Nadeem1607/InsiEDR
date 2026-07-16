@@ -166,8 +166,12 @@ def process_encrypted_request(req) -> tuple[int, dict[str, Any]]:
     # 2. Bearer Token / Auth Validation
     expected_token = config.agent_bearer_token
     if expected_token:
+        import hmac
         auth_header = req.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer ") or auth_header.split(" ", 1)[1] != expected_token:
+        if not auth_header.startswith("Bearer "):
+            raise IngestError("invalid or missing Bearer token", status_code=403)
+        provided_token = auth_header.split(" ", 1)[1]
+        if not hmac.compare_digest(provided_token.encode("utf-8"), expected_token.encode("utf-8")):
             raise IngestError("invalid or missing Bearer token", status_code=403)
 
     # Basic header validation
@@ -247,22 +251,27 @@ def process_encrypted_request(req) -> tuple[int, dict[str, Any]]:
         _check_duplicate_policy(storage, envelope, payload)
         storage.store_raw_payload(envelope, payload)
         
-        # Async queue ML modeling to prevent blocking the web server
-        executor = current_app.extensions.get("ml_executor")
-        if executor:
-            app = current_app._get_current_object()
-            
-            def _async_process(app_instance, storage_instance, payload_data):
-                with app_instance.app_context():
-                    try:
-                        model_bridge.process_payload(storage_instance, payload_data)
-                    except Exception as e:
-                        current_app.logger.error(f"Async ML processing failed: {e}")
-
-            executor.submit(_async_process, app, storage, payload)
+        # Enqueue ML inference as a durable task (survives server restart)
+        task_queue = current_app.extensions.get("task_queue")
+        if task_queue is not None:
+            task_queue.enqueue("ml_inference", payload)
         else:
-            # Fallback to sync if executor is missing
-            model_bridge.process_payload(storage, payload)
+            # Fallback: legacy in-memory executor (no durability guarantee)
+            executor = current_app.extensions.get("ml_executor")
+            if executor:
+                app = current_app._get_current_object()
+
+                def _async_process(app_instance, storage_instance, payload_data):
+                    with app_instance.app_context():
+                        try:
+                            model_bridge.process_payload(storage_instance, payload_data)
+                        except Exception as e:
+                            current_app.logger.error(f"Async ML processing failed: {e}")
+
+                executor.submit(_async_process, app, storage, payload)
+            else:
+                # Final fallback: synchronous processing
+                model_bridge.process_payload(storage, payload)
             
     except Exception as exc:
         import traceback

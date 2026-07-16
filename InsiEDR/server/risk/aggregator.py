@@ -68,8 +68,11 @@ class RiskAggregator:
                 anomalies_flagged += 1
                 reasons.append(result.get("reason", ""))
 
-        # Calculate base aggregated score
-        final_score = total_weighted_score / total_confidence if total_confidence > 0 else 0.0
+        # Calculate base aggregated score (Blend max score 70% with average score 30% to prevent heavy dilution)
+        avg_score = total_weighted_score / total_confidence if total_confidence > 0 else 0.0
+        max_score = max([r.get("score", 0.0) * r.get("confidence", 0.0) for r in detector_results]) if detector_results else 0.0
+        final_score = (max_score * 0.7) + (avg_score * 0.3)
+
         # Agreement Amplifier: If multiple disparate detectors flag an anomaly, amplify the risk
         if anomalies_flagged > 1:
             final_score *= (1.0 + (anomalies_flagged * 0.1))
@@ -78,13 +81,6 @@ class RiskAggregator:
         if anomalies_flagged == 1 and correlated_signals.get("auth_burst", {}).get("is_anomaly"):
             final_score *= 0.6  # 40% penalty for isolated authentication bursts (no lateral movement)
             reasons.append("Isolated authentication burst with no correlated lateral movement (Risk suppressed).")
-
-        # Cap at 100.0
-        avg_score = total_weighted_score / total_confidence if total_confidence > 0 else 0.0
-        max_score = max([r.get("score", 0.0) * r.get("confidence", 0.0) for r in detector_results]) if detector_results else 0.0
-        
-        # Blend max score (70%) with average score (30%) to prevent heavy dilution
-        final_score = (max_score * 0.7) + (avg_score * 0.3)
 
         # Temporal Correlation (Memory Window)
         # Fetch the max risk score for the user in the past 4 hours

@@ -1,0 +1,16 @@
+# CONCLUSION SLIDES: LIMITATIONS & FUTURE WORK
+
+## SLIDE: LIMITATIONS
+*   **Sequence Warm-up Delay:** The system requires a minimum buffer of 100 keystrokes before the first biometric verification can occur.
+*   **Hardware Dependency:** Drastic changes in hardware (e.g., switching from a mechanical keyboard to a touchscreen) pueden alter the temporal signature significantly.
+*   **Physical Fatigue/Injury:** Biological factors like hand strain or injuries can temporarily increase the False Rejection Rate (FRR).
+*   **Enrollment Time:** A stable user profile requires at least 3-5 distinct typing sessions to capture natural rhythmic variance.
+
+---
+
+## SLIDE: FUTURE WORK
+*   **Multi-Modal Fusion:** Integrating keystroke dynamics with mouse movement patterns and touch pressure for a "Continuous Behavioral Profile."
+*   **Adversarial Training:** Implementing GANS (Generative Adversarial Networks) to specifically train the model against "Sophisticated Impersionation" attacks.
+*   **Adaptive Thresholding:** Developing a dynamic threshold that adjusts based on the user's current environment or typing context.
+*   **Cross-Device Transfer Learning:** Researching ways to map a user's desktop typing rhythm to their mobile/tablet typing signature automatically.
+*   **Privacy-Preserving Embeddings:** Using Federated Learning to train models without ever transmitting raw keystroke data to a central server.

@@ -11,7 +11,11 @@ def load_env():
                 if line.strip() and not line.startswith("#"):
                     parts = line.strip().split("=", 1)
                     if len(parts) == 2:
-                        os.environ[parts[0]] = parts[1]
+                        key = parts[0].strip()
+                        val = parts[1].strip()
+                        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                            val = val[1:-1]
+                        os.environ[key] = val
 
 load_env()
 
@@ -27,7 +31,6 @@ from server.api.model import bp as model_bp
 from server.plugin_registry import registry
 from server.storage.postgres_storage import PostgresStorage
 from server.dashboard import bp as dashboard_bp
-
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -54,8 +57,20 @@ def create_app(*, storage=None, apply_migrations: bool = True) -> Flask:
         if apply_migrations and callable(ensure_migrations):
             ensure_migrations()
 
-    # Dedicated thread pool for async ML inference
+    # Dedicated thread pool for legacy async ML fallback (used when task queue unavailable)
     app.extensions["ml_executor"] = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ML_Worker")
+
+    # Start the durable PostgreSQL-backed task queue worker
+    if storage is not None:
+        try:
+            from server.task_queue import start_worker
+            worker = start_worker(storage, app)
+            app.extensions["task_queue_worker"] = worker
+        except Exception as exc:
+            import logging
+            logging.getLogger("insiedr.app").warning(
+                "Could not start PgTaskWorker (falling back to in-memory executor): %s", exc
+            )
 
     @app.route("/", methods=["GET"])
     def root():

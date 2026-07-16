@@ -119,15 +119,6 @@ def query_security_events(
 
     try:
         handle = win32evtlog.OpenEventLog(server, log_type)
-        if bookmark == 0:
-            try:
-                latest = win32evtlog.ReadEventLog(handle, flags, 0)
-                if latest:
-                    bookmark = latest[0].RecordNumber
-                    max_record = bookmark
-                    _save_bookmark(bookmark)
-            except Exception:
-                pass
     except Exception as exc:
         if _is_access_denied(exc):
             raise PermissionError(
@@ -160,8 +151,7 @@ def query_security_events(
 
                 # Apply bookmark filter: skip events we've seen before
                 if record.RecordNumber <= bookmark:
-                    _save_bookmark(max_record)
-                    return events
+                    continue
 
                 eid = record.EventID & 0xFFFF
                 if eid not in event_ids:
@@ -399,7 +389,7 @@ def collect(target_date: Optional[datetime] = None) -> Dict[str, Dict[str, Any]]
     events = query_security_events([4624, 4634, 4647, 4625, 4800, 4801, 4778, 4779], day_start, day_end)
     features = derive_features(events, selected_date)
     features["_collector_quality"] = "heuristic"
-    return {"status": "success", "payload": features}
+    return features
 
 
 def collect_features() -> Dict[str, Dict[str, Any]]:
