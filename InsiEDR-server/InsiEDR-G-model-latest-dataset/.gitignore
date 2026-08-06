@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+.gemini/
+.agents/
+
+# Ignore extremely large raw tarball to prevent GitHub 100MB rejection
+old insiEDR/r4.2.tar.bz2
+
+# Ignore raw data logs and intermediate CSV datasets
+INPUT_LOGS/
+OUTPUT_LABELS/
+latest_data/raw_logs/
+latest_data/*.csv
+

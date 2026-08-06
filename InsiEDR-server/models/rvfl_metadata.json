@@ -1,0 +1,6 @@
+{
+    "input_features": 1,
+    "hidden_size": 128,
+    "num_layers": 5,
+    "sequence_length": 7
+}
