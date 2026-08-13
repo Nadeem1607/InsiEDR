@@ -1,0 +1,30 @@
+# Environment / secrets
+.env
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Build artifacts
+build/
+*.spec
+
+# Raw dist binaries (too large for git)
+dist/*.exe
+dist/*.dll
+
+# Deploy zip is allowed in git
+# deploy/ is NOT ignored
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
