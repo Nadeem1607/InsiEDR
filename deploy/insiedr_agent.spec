@@ -24,6 +24,7 @@ a = Analysis(
         "cryptography.hazmat.backends.openssl",
         "requests", "urllib3", "certifi",
         "dotenv",
+        "sqlite3", "xml.etree", "xml.etree.ElementTree",
     ],
     hookspath=["deploy/hooks"],
     runtime_hooks=["deploy/hooks/rthook_collectors.py"],
