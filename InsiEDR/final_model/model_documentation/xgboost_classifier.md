@@ -1,11 +1,43 @@
 # XGBoost Scenario Classifier
 
 ## 1. Model Overview
-The XGBoost Classifier is Level 2 of the InsiEDR pipeline. It receives the anomaly scores from Level 1 (Isolation Forest) and determines the specific **type of threat** a user's behavior represents. Instead of simply flagging someone as suspicious, this model classifies which of 6 insider threat scenarios best matches the user's activity pattern.
+The XGBoost Classifier is Level 2 of the InsiEDR pipeline. It performs two distinct jobs:
+
+1. **SHAP Domain Weighting** — Before training, the XGBoost model is used to determine how much each activity domain (Logon, File, Device, HTTP) contributes to insider threat detection. These importance scores are derived using SHAP (SHapley Additive exPlanations) and are used to combine the four Isolation Forest risk scores into a single weighted overall risk score.
+
+2. **Threat Scenario Classification** — After computing the weighted risk score, the XGBoost model classifies each user-day into one of 6 specific insider threat scenarios, giving analysts a clear picture of what kind of attack or exfiltration behavior is taking place.
 
 ---
 
-## 2. Input Data Fed into the Model
+## 2. SHAP Domain Weighting
+
+### What is SHAP?
+SHAP is a method for explaining which features (inputs) contribute most to a model's predictions. In this pipeline, XGBoost is trained on all four domain risk scores. SHAP is then applied to that trained model to measure the average contribution of each domain to the final insider threat prediction.
+
+### How the Weights Are Derived:
+- The XGBoost model is trained on labeled data containing Logon, File, Device, and HTTP risk scores.
+- SHAP values are computed for each domain feature across all training samples.
+- The average absolute SHAP value for each domain is used as its importance weight.
+- The 4 weights are then normalized so they sum to 1.0.
+
+### Derived Domain Weights:
+| Domain | Weight |
+|--------|--------|
+| HTTP Risk | 61.45% |
+| Logon Risk | 18.69% |
+| File Risk | 17.37% |
+| Device Risk | 2.50% |
+
+This tells us that web browsing behavior (HTTP) is by far the strongest signal for insider threats, while USB/device activity has the smallest individual contribution.
+
+### How the Weights Are Applied:
+The four Isolation Forest domain scores are combined using these weights to compute a single `overall_risk` score for each user per day:
+- `raw_overall_risk = (0.1737 × file_risk) + (0.0250 × device_risk) + (0.6145 × http_risk) + (0.1869 × logon_risk)`
+- The raw score is then normalized relative to the highest score observed during training to produce `overall_risk` (a value between 0.0 and 1.0).
+
+---
+
+## 3. Input Data Fed into the Model
 
 The model receives **40 features per user per day**, combining raw activity statistics with risk scores computed by the Isolation Forest:
 
@@ -38,7 +70,7 @@ The model receives **40 features per user per day**, combining raw activity stat
 
 ---
 
-## 3. How the Model Works
+## 4. How the Model Works
 
 1. **Class Balancing**: Insider threat cases are rare compared to normal activity. The model applies oversampling on minority classes so every scenario gets equal representation during training.
 2. **Gradient Boosted Trees**: XGBoost builds 500 decision trees in sequence. Each new tree corrects the errors made by the previous ones.
@@ -48,7 +80,7 @@ The model receives **40 features per user per day**, combining raw activity stat
 
 ---
 
-## 4. Output of the Model
+## 5. Output of the Model
 
 For every user on each day, the model outputs:
 
