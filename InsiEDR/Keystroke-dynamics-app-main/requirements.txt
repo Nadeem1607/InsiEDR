@@ -1,8 +1,0 @@
-# TensorFlow wheels are available for Python 3.10-3.12 on this project stack.
-tensorflow>=2.16.1,<2.17; python_version < "3.13"
-numpy
-matplotlib
-scikit-learn
-scipy
-streamlit
-pandas
