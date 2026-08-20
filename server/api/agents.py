@@ -41,11 +41,11 @@ def get_tamper_alerts():
 				if signals.get("tamper_detector", {}).get("is_anomaly") is True:
 					# Patch risk level for consistency with UI expectations
 					level = (ev.get("risk_level") or "").upper()
-					if not level or level == "NONE":
+					if not level or level in ["NONE", "INFO"]:
 						score = float(ev.get("risk_score") or 0.0)
 						if score >= 80: level = "CRITICAL"
 						elif score >= 60: level = "HIGH"
-						elif score >= 30: level = "MEDIUM"
+						elif score >= 40: level = "MEDIUM"
 						else: level = "LOW"
 					ev["risk_level"] = level
 					

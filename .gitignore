@@ -15,8 +15,8 @@ env/
 ENV/
 
 # Local environment and secrets
-.env
-.env.*
+# .env (Commented out so it can be pushed for deployment)
+# .env.*
 !.env.example
 *.key
 *.pem
@@ -50,3 +50,6 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+model/INPUT_LOGS/*.csv
+*.csv

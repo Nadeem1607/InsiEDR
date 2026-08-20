@@ -41,6 +41,13 @@ services:
     environment:
       - DATABASE_DSN=postgresql://${POSTGRES_USER:-insiedr}:${POSTGRES_PASSWORD:-insiedr_pass}@db:5432/${POSTGRES_DB:-insiedr_db}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-insiedr_redis_pass}@redis:6379/0
+      - PYTHONPATH=/app
+      - SYSTEM_DEFAULT_PROFILE=${SYSTEM_DEFAULT_PROFILE:-DEFAULT}
+      - ENABLE_CORROBORATION_GUARD=true
+    volumes:
+      - ./heuristics:/app/heuristics
+      - ./server:/app/server
+      - ./models:/app/models
     deploy:
       replicas: 3
     # Nginx will route to these instances on port 5000 internally
@@ -58,3 +65,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+

@@ -95,10 +95,10 @@ def get_user_analysis(username: str):
 def _patch_risk_level(event: dict):
     level = (event.get("risk_level") or "").upper()
     score = float(event.get("risk_score") or 0.0)
-    if not level or level == "NONE":
+    if not level or level in ["NONE", "INFO"]:
         if score >= 80: level = "CRITICAL"
         elif score >= 60: level = "HIGH"
-        elif score >= 30: level = "MEDIUM"
+        elif score >= 40: level = "MEDIUM"
         else: level = "LOW"
     event["risk_level"] = level
     event["_computed_level"] = level

@@ -96,11 +96,11 @@ class ServerConfig:
     @property
     def zscore_calibration_threshold(self) -> float:
         """Dynamic calibration cutoff for Z-Score models."""
-        raw = os.environ.get("INSIEDR_ZSCORE_CALIBRATION_THRESHOLD", "3.0")
+        raw = os.environ.get("INSIEDR_ZSCORE_CALIBRATION_THRESHOLD", "3.5")
         try:
             return float(raw)
         except ValueError:
-            return 3.0
+            return 3.5
 
     @property
     def enable_fernet(self) -> bool:

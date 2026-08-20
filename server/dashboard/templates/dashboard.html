@@ -252,7 +252,8 @@
         padding: 4px 12px; border-radius: 20px;
         font-size: 12px; font-weight: 700;
       }
-      .risk-pill.critical, .risk-pill.high { background: rgba(239,68,68,0.12); color: var(--accent-red); }
+      .risk-pill.critical { background: rgba(239,68,68,0.18); color: var(--accent-red); }
+      .risk-pill.high { background: rgba(244,63,94,0.18); color: var(--accent-rose); }
       .risk-pill.medium { background: rgba(245,158,11,0.12); color: var(--accent-amber); }
       .risk-pill.low { background: rgba(16,185,129,0.12); color: var(--accent-emerald); }
       .risk-pill.none { background: var(--bg-elevated); color: var(--text-muted); }
@@ -346,10 +347,16 @@
       #logsView { display: none; }
       
       .logs-container { background: var(--bg-card); border: 1px solid var(--border-primary); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-card); }
-      .logs-table-wrap { overflow-x: auto; max-height: 70vh; }
-      .logs-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
-      .logs-table th { position: sticky; top: 0; background: var(--bg-secondary); padding: 12px 16px; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 1px solid var(--border-primary); z-index: 10; }
-      .logs-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-primary); color: var(--text-secondary); white-space: nowrap; }
+      .logs-table-wrap { overflow-x: hidden; max-height: 70vh; }
+      .logs-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; table-layout: fixed; }
+      .logs-table th:nth-child(1) { width: 150px; }
+      .logs-table th:nth-child(2) { width: 130px; }
+      .logs-table th:nth-child(3) { width: 120px; }
+      .logs-table th:nth-child(4) { width: 150px; }
+      .logs-table th:nth-child(5) { width: auto; }
+      .logs-table th:nth-child(6) { width: 100px; }
+      .logs-table th { position: sticky; top: 0; background: var(--bg-secondary); padding: 12px 14px; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 1px solid var(--border-primary); z-index: 10; }
+      .logs-table td { padding: 12px 14px; border-bottom: 1px solid var(--border-primary); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .logs-table tbody tr { cursor: pointer; transition: background 0.15s; }
       .logs-table tbody tr:hover { background: var(--bg-card-hover); }
       .logs-table tbody tr.selected { background: rgba(59,130,246,0.08); border-left: 3px solid var(--accent-blue); }
@@ -396,17 +403,6 @@
         </div>
       </div>
       <div class="header-right">
-        <div class="notification-bell" onclick="toggleAlertPanel()">
-          🔔 <span class="notification-badge" id="alertBadge" style="display:none;">0</span>
-        </div>
-        <button class="nav-tab" style="background:var(--gradient-blue);color:white;border:none;margin-right:12px;padding:6px 14px;border-radius:20px;font-weight:600;" id="btnRetrain" onclick="retrainModels()">
-          Retrain Models
-        </button>
-        <span class="last-update" id="lastUpdate">—</span>
-        <div class="refresh-toggle" id="refreshToggle" onclick="toggleAutoRefresh()">
-          <span class="refresh-dot" id="refreshDot"></span>
-          <span id="refreshLabel">Live</span>
-        </div>
       </div>
     </header>
 
@@ -431,19 +427,19 @@
       <div class="section">
         <div class="three-col">
           <div class="card">
-            <div class="card-title"><span class="icon">🚨</span> Recent Threat Feed</div>
+            <div class="card-title">Recent Threat Feed</div>
             <div class="threat-feed" id="threatFeed">
               <div class="loading-wrap"><div class="spinner"></div></div>
             </div>
           </div>
           <div class="card">
-            <div class="card-title"><span class="icon">📡</span> Domain Risk Breakdown</div>
+            <div class="card-title">Domain Risk Breakdown</div>
             <div class="chart-wrap">
               <canvas id="radarChart"></canvas>
             </div>
           </div>
           <div class="card">
-            <div class="card-title"><span class="icon">🎯</span> Severity Distribution</div>
+            <div class="card-title">Severity Distribution</div>
             <div class="chart-wrap">
               <canvas id="severityChart"></canvas>
             </div>
@@ -454,7 +450,7 @@
       <!-- ======================== RISK TIMELINE ======================== -->
       <div class="section">
         <div class="card">
-          <div class="card-title"><span class="icon">📈</span> Risk Score Timeline</div>
+          <div class="card-title">Risk Score Timeline</div>
           <div class="chart-wrap-lg" style="width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden;">
             <div id="timelineContainer" style="height: 100%; min-width: 100%;">
               <canvas id="timelineChart"></canvas>
@@ -470,7 +466,7 @@
       <div class="section">
         <div class="card">
           <div class="section-header" style="margin-bottom:0">
-            <div class="card-title" style="margin-bottom:0"><span class="icon">👤</span> User Risk Summary</div>
+            <div class="card-title" style="margin-bottom:0">User Risk Summary</div>
             <div class="section-badge" id="userCount">0 users</div>
           </div>
           <div class="user-table-wrap" style="margin-top:14px">
@@ -497,7 +493,7 @@
       <!-- ======================== COLLECTOR HEALTH ======================== -->
       <div class="section">
         <div class="card">
-          <div class="card-title"><span class="icon">🔌</span> Collector Health</div>
+          <div class="card-title">Collector Health</div>
           <div class="collector-grid" id="collectorGrid"></div>
         </div>
       </div>
@@ -514,7 +510,7 @@
               <div id="drillPredictions"></div>
             </div>
             <div>
-              <div class="card-title"><span class="icon">📊</span> Feature Contributions</div>
+              <div class="card-title">Feature Contributions</div>
               <div class="chart-wrap">
                 <canvas id="featureChart"></canvas>
               </div>
@@ -529,7 +525,7 @@
       <div id="logsView">
         <div class="section-header">
           <div class="section-title">
-            <span class="icon">🔍</span> Raw Telemetry Logs 
+            Raw Telemetry Logs 
             <span id="activeFilterBadge" style="display:none; margin-left: 10px; font-size: 11px; padding: 4px 10px; border-radius: 6px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 600;"></span>
             <input type="text" id="filterUser" placeholder="Search by Username (Press Enter)..." style="margin-left: 15px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-primary); background: rgba(255,255,255,0.05); color: white; font-size: 12px; width: 220px;" onkeyup="if(event.key === 'Enter') { activeUsernameFilter = this.value.trim(); document.getElementById('clearFilterBtn').style.display = 'inline-block'; loadLogs(); }">
             <button id="clearFilterBtn" onclick="clearFilters()" style="display:none; margin-left: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600; transition: all 0.2s;">✕ Clear</button>
@@ -563,7 +559,7 @@
       <!-- LOG INSPECTOR SIDEBAR -->
       <div class="log-inspector" id="logInspector">
         <div class="log-inspector-header">
-          <div class="log-inspector-title"><span class="icon">📄</span> Log Details</div>
+          <div class="log-inspector-title">Log Details</div>
           <button class="log-inspector-close" onclick="closeLogInspector()">✕</button>
         </div>
         <div class="log-inspector-tabs">
@@ -577,17 +573,6 @@
           </div>
         </div>
       </div>
-
-      <!-- ALERT INSPECTOR SIDEBAR -->
-      <div class="log-inspector" id="alertInspector" style="width: 450px; z-index: 95;">
-        <div class="log-inspector-header" style="background: rgba(239,68,68,0.1);">
-          <div class="log-inspector-title" style="color: var(--accent-red);"><span class="icon">🚨</span> Active Risk Alerts</div>
-          <button class="log-inspector-close" onclick="toggleAlertPanel()">✕</button>
-        </div>
-        <div class="log-inspector-content" id="alertList" style="padding: 16px;">
-          <div class="empty-state"><div class="empty-state-text">No active alerts</div></div>
-        </div>
-      </div>
     </main>
 
     <script>
@@ -597,12 +582,10 @@
       let timelineChart = null;
       let featureChart = null;
       let severityChart = null;
-      let autoRefresh = true;
-      let refreshTimer = null;
       let selectedDrillUser = null;
       let extraTimelineEvents = [];
       let timelineOffset = 200;
-      const REFRESH_INTERVAL = 30000;
+      const REFRESH_INTERVAL = 3000;
 
       /* ============================== HELPERS ============================== */
       async function api(url) {
@@ -622,13 +605,15 @@
         return `${Math.floor(s/86400)}d ago`;
       }
       function riskColor(score) {
-        if (score >= 60) return 'var(--accent-red)';
-        if (score >= 30) return 'var(--accent-amber)';
+        if (score >= 80) return 'var(--accent-red)';
+        if (score >= 60) return 'var(--accent-rose)';
+        if (score >= 40) return 'var(--accent-amber)';
         return 'var(--accent-emerald)';
       }
       function riskClass(level) {
         const l = (level || '').toUpperCase();
-        if (l === 'CRITICAL' || l === 'HIGH') return 'high';
+        if (l === 'CRITICAL') return 'critical';
+        if (l === 'HIGH') return 'high';
         if (l === 'MEDIUM') return 'medium';
         return 'low';
       }
@@ -656,9 +641,6 @@
           if (mp === 'ready') el.style.color = 'var(--accent-emerald)';
           else if (mp === 'disabled') el.style.color = 'var(--text-muted)';
           else el.style.color = 'var(--accent-amber)';
-
-          document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
-          if (typeof processAlerts === 'function') processAlerts();
         } catch (e) { console.error('KPI load failed:', e); }
       }
 
@@ -667,7 +649,7 @@
         const events = (dashData?.risk_events || []).slice(0, 30);
         const el = document.getElementById('threatFeed');
         if (!events.length) {
-          el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🛡️</div><div class="empty-state-text">No threats detected<br>All clear</div></div>';
+          el.innerHTML = '<div class="empty-state"><div class="empty-state-text">No threats detected<br>All clear</div></div>';
           return;
         }
         el.innerHTML = events.map(ev => {
@@ -678,11 +660,11 @@
              let signals = ev.correlated_signals_json;
              if (typeof signals === 'string') signals = JSON.parse(signals);
              if (signals?.cert_scenarios?.length > 0) {
-                 summaryText = '🚨 ' + signals.cert_scenarios.map(s => s.id).join(', ');
+                 summaryText = signals.cert_scenarios.map(s => s.id).join(', ');
              } else if (signals?.heuristics?.detections?.length > 0) {
-                 summaryText = '🚨 ' + signals.heuristics.detections[0].scenario;
+                 summaryText = signals.heuristics.detections[0].scenario;
              } else if (signals?.predicted_scenario?.scenario && signals.predicted_scenario.scenario !== 'normal') {
-                 summaryText = '⚠️ ' + signals.predicted_scenario.scenario;
+                 summaryText = signals.predicted_scenario.scenario;
              }
           } catch(e) {}
 
@@ -760,13 +742,14 @@
       /* ============================== SEVERITY CHART ============================== */
       function renderSeverityChart() {
         const events = dashData?.risk_events || [];
-        const counts = { info: 0, low: 0, medium: 0, high: 0, critical: 0 };
+        const counts = { low: 0, medium: 0, high: 0, critical: 0 };
         events.forEach(ev => {
-          const l = (ev.risk_level || 'info').toLowerCase();
+          let l = (ev.risk_level || 'low').toLowerCase();
+          if (l === 'info') l = 'low';
           if (counts[l] !== undefined) counts[l]++;
         });
 
-        const data = [counts.info, counts.low, counts.medium, counts.high, counts.critical];
+        const data = [counts.low, counts.medium, counts.high, counts.critical];
         const hasData = data.some(v => v > 0);
 
         if (severityChart) severityChart.destroy();
@@ -774,11 +757,10 @@
         severityChart = new Chart(ctx, {
           type: 'doughnut',
           data: {
-            labels: ['Info', 'Low', 'Medium', 'High', 'Critical'],
+            labels: ['Low', 'Medium', 'High', 'Critical'],
             datasets: [{
-              data: hasData ? data : [1, 1, 1, 1, 1],
+              data: hasData ? data : [1, 1, 1, 1],
               backgroundColor: [
-                'rgba(148, 163, 184, 0.6)',  // Info (slate)
                 'rgba(16, 185, 129, 0.8)',   // Low (emerald)
                 'rgba(245, 158, 11, 0.8)',   // Medium (amber)
                 'rgba(244, 63, 94, 0.8)',    // High (rose)
@@ -922,16 +904,20 @@
             id: 'thresholdBands',
             beforeDraw(chart) {
               const {ctx, chartArea: {left, right, top, bottom}, scales: {y}} = chart;
-              // Red zone (80-100)
+              // Critical zone (80-100)
               const y80 = y.getPixelForValue(80);
               const y100 = y.getPixelForValue(100);
               ctx.save();
-              ctx.fillStyle = 'rgba(239,68,68,0.06)';
+              ctx.fillStyle = 'rgba(239,68,68,0.07)';
               ctx.fillRect(left, y100, right-left, y80-y100);
-              // Amber zone (50-80)
-              const y50 = y.getPixelForValue(50);
-              ctx.fillStyle = 'rgba(245,158,11,0.04)';
-              ctx.fillRect(left, y80, right-left, y50-y80);
+              // High zone (60-80)
+              const y60 = y.getPixelForValue(60);
+              ctx.fillStyle = 'rgba(244,63,94,0.05)';
+              ctx.fillRect(left, y80, right-left, y60-y80);
+              // Medium zone (40-60)
+              const y40 = y.getPixelForValue(40);
+              ctx.fillStyle = 'rgba(245,158,11,0.03)';
+              ctx.fillRect(left, y60, right-left, y40-y60);
               ctx.restore();
             }
           }]
@@ -968,7 +954,7 @@
           } else {
               if (score >= 80) level = 'CRITICAL';
               else if (score >= 60) level = 'HIGH';
-              else if (score >= 30) level = 'MEDIUM';
+              else if (score >= 40) level = 'MEDIUM';
               else level = 'LOW';
           }
           
@@ -1054,9 +1040,7 @@
             { name: 'File', key: 'file', icon: '📁', cls: 'file' },
             { name: 'Device', key: 'device', icon: '💾', cls: 'device' },
             { name: 'HTTP', key: 'http', icon: '🌐', cls: 'http' },
-            { name: 'Email', key: 'email', icon: '📧', cls: 'email' },
             { name: 'Process', key: 'process', icon: '⚙️', cls: 'process' },
-            { name: 'Network', key: 'network', icon: '📡', cls: 'network' },
           ];
           const collectorCounts = stats.collector_counts || {};
           const totalSuccess = collectorStatus.success || 0;
@@ -1281,18 +1265,6 @@
         rows.forEach(r => tbody.appendChild(r));
       }
 
-      /* ============================== AUTO-REFRESH ============================== */
-      function toggleAutoRefresh() {
-        autoRefresh = !autoRefresh;
-        document.getElementById('refreshDot').classList.toggle('paused', !autoRefresh);
-        document.getElementById('refreshLabel').textContent = autoRefresh ? 'Live' : 'Paused';
-        if (autoRefresh) startRefreshTimer();
-        else clearInterval(refreshTimer);
-      }
-      function startRefreshTimer() {
-        clearInterval(refreshTimer);
-        refreshTimer = setInterval(refreshAll, REFRESH_INTERVAL);
-      }
 
       /* ============================== LOGS EXPLORER ============================== */
       let allLogsData = [];
@@ -1583,165 +1555,6 @@
          return html;
       }
 
-      /* ============================== ALERT NOTIFICATIONS ============================== */
-      let dismissedAlerts = JSON.parse(localStorage.getItem('dismissedAlerts') || '[]');
-
-      function toggleAlertPanel() {
-          document.getElementById('alertInspector').classList.toggle('open');
-      }
-
-      function dismissAlert(alertId) {
-          dismissedAlerts.push(alertId);
-          localStorage.setItem('dismissedAlerts', JSON.stringify(dismissedAlerts));
-          processAlerts(); // Re-render
-      }
-
-      function isTamperEvent(ev) {
-          let s = ev.correlated_signals_json;
-          if (typeof s === 'string') try { s = JSON.parse(s); } catch(e) { return false; }
-          return s?.tamper_detector?.is_anomaly === true;
-      }
-
-      function processAlerts() {
-          const events = dashData?.risk_events || [];
-          const activeAlerts = events.filter(ev => {
-              const score = parseFloat(ev.risk_score || 0);
-              const level = (ev.risk_level || '').toLowerCase();
-              const qualifies = level === 'medium' || (level === 'high' && score >= 65.0) || (level === 'critical' && score >= 85.0);
-              const alertId = ev.payload_id || (ev.username + '-' + ev.created_at);
-              return (qualifies || isTamperEvent(ev)) && !dismissedAlerts.includes(alertId);
-          });
-
-          const tamperAlerts = activeAlerts.filter(ev => isTamperEvent(ev));
-          const regularAlerts = activeAlerts.filter(ev => !isTamperEvent(ev));
-
-          const badge = document.getElementById('alertBadge');
-          if (activeAlerts.length > 0) {
-              badge.textContent = activeAlerts.length;
-              badge.style.display = 'flex';
-              if (tamperAlerts.length > 0) {
-                  badge.classList.add('tamper-pulse');
-              } else {
-                  badge.classList.remove('tamper-pulse');
-              }
-          } else {
-              badge.style.display = 'none';
-              badge.classList.remove('tamper-pulse');
-          }
-
-          const container = document.getElementById('alertList');
-          if (activeAlerts.length === 0) {
-              container.innerHTML = '<div class="empty-state"><div class="empty-state-text">No active alerts</div></div>';
-              return;
-          }
-
-          let html = '';
-
-          // Render Tamper Alerts First
-          if (tamperAlerts.length > 0) {
-              html += tamperAlerts.map(ev => {
-                  const score = parseFloat(ev.risk_score || 0);
-                  const alertId = ev.payload_id || (ev.username + '-' + ev.created_at);
-                  
-                  return `
-                  <div class="tamper-card">
-                      <button onclick="dismissAlert('${alertId}')" style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.05); border: 1px solid #7f1d1d; color: #fca5a5; cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 4px; transition: all 0.2s;" title="Dismiss Alert" onmouseover="this.style.color='#fff';this.style.background='rgba(239,68,68,0.8)';this.style.borderColor='rgba(239,68,68,1)'" onmouseout="this.style.color='#fca5a5';this.style.background='rgba(255,255,255,0.05)';this.style.borderColor='#7f1d1d'">🗑️ Dismiss</button>
-                      <div style="font-weight: 800; font-size: 15px; margin-bottom: 10px; color: #fca5a5; display: flex; align-items: center; gap: 6px;">☠️ AGENT FORCEFULLY KILLED</div>
-                      
-                      <table style="width:100%; font-size:12px; margin-bottom: 12px; border-collapse: collapse;">
-                          <tr><td style="color:rgba(255,255,255,0.6); width: 80px; padding:2px 0;">Target User:</td><td style="color:white; font-weight:600;">${safe(ev.username)}</td></tr>
-                          <tr><td style="color:rgba(255,255,255,0.6); padding:2px 0;">Agent ID:</td><td style="color:white;">${safe(ev.agent_id)}</td></tr>
-                          <tr><td style="color:rgba(255,255,255,0.6); padding:2px 0;">Hostname:</td><td style="color:white;">${safe(ev.hostname)}</td></tr>
-                          <tr><td style="color:rgba(255,255,255,0.6); padding:2px 0;">Time:</td><td style="color:white;">${ago(ev.created_at)} (${new Date(ev.created_at).toLocaleString()})</td></tr>
-                      </table>
-                      
-                      <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 10px; font-size: 12px;">
-                          <div style="color:var(--accent-red); margin-bottom: 4px; font-weight:600;">CRITICAL TAMPER ALERT:</div>
-                          <div style="color:var(--text-primary);">${safe(ev.summary)}</div>
-                      </div>
-                      <div style="margin-top: 10px;">
-                          <span style="font-size: 10px; padding: 3px 8px; border-radius: 4px; background: #991b1b; color: white; font-weight: 700; text-transform: uppercase;">FORCEFULLY KILLED</span>
-                      </div>
-                  </div>
-                  `;
-              }).join('');
-              
-              if (regularAlerts.length > 0) {
-                  html += `<div style="height: 1px; background: var(--border-primary); margin: 20px 0; position: relative;"><span style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); background: var(--bg-secondary); padding: 0 10px; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Other Alerts</span></div>`;
-              }
-          }
-
-          html += regularAlerts.map(ev => {
-              const score = parseFloat(ev.risk_score || 0);
-              const alertId = ev.payload_id || (ev.username + '-' + ev.created_at);
-              
-              let signals = {};
-              try { signals = typeof ev.correlated_signals_json === 'string' ? JSON.parse(ev.correlated_signals_json) : (ev.correlated_signals_json || {}); } catch(e) {}
-              
-              let tagsHTML = '';
-              if (signals.cert_scenarios && signals.cert_scenarios.length > 0) {
-                  tagsHTML += signals.cert_scenarios.map(s => `<span class="scenario-tag" style="background:rgba(239,68,68,0.2);color:#fca5a5;margin-right:4px;">${safe(s.id)} - ${safe(s.description)}</span>`).join('');
-              }
-              if (signals.heuristics?.detections) {
-                  tagsHTML += signals.heuristics.detections.map(d => `<span class="scenario-tag" style="background:rgba(245,158,11,0.2);color:#fcd34d;margin-right:4px;" title="This tag relies on unverified heuristics">[VERIFY_REQUIRED: Heuristic] ${safe(d.scenario)}</span>`).join('');
-              }
-              if (!tagsHTML && score > 0) {
-                 tagsHTML = '<span class="scenario-tag" style="background:var(--bg-elevated);color:var(--text-muted);">Anomaly Detected</span>';
-              }
-              
-              const rfScore = signals.random_forest?.score ? signals.random_forest.score.toFixed(1) : 'N/A';
-              const rfConf = signals.random_forest?.confidence ? (signals.random_forest.confidence * 100).toFixed(1) + '%' : 'N/A';
-              const ifScore = signals.isolation_forest?.score ? signals.isolation_forest.score.toFixed(1) : 'N/A';
-
-              let paramHTML = '';
-              const featContrib = signals.zscore?.feature_contributions || signals.isolation_forest?.feature_contributions;
-              if (featContrib) {
-                  paramHTML = `<div style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
-                                 <div style="color:var(--text-muted); margin-bottom: 4px;">Simulated Parameters Triggered:</div>
-                                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">` + 
-                              Object.entries(featContrib).map(([k,v]) => `<div><span style="color:var(--text-muted)">${k}:</span> <b style="color:var(--text-primary)">${v}</b></div>`).join('') +
-                              `</div></div>`;
-              }
-
-              return `
-              <div style="background: var(--bg-card); border: 1px solid var(--border-primary); border-left: 3px solid ${riskColor(score)}; border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-                  <button onclick="dismissAlert('${alertId}')" style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-primary); color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 4px; transition: all 0.2s;" title="Dismiss Alert" onmouseover="this.style.color='#fff';this.style.background='rgba(239,68,68,0.8)';this.style.borderColor='rgba(239,68,68,1)'" onmouseout="this.style.color='var(--text-muted)';this.style.background='rgba(255,255,255,0.05)';this.style.borderColor='var(--border-primary)'">🗑️ Dismiss</button>
-                  <div style="font-weight: 700; font-size: 14px; margin-bottom: 10px; color: ${riskColor(score)}">${safe(ev.risk_level).toUpperCase()} ALERT — Score: ${score.toFixed(1)}</div>
-                  
-                  <table style="width:100%; font-size:12px; margin-bottom: 12px; border-collapse: collapse;">
-                      <tr><td style="color:var(--text-muted); width: 80px; padding:2px 0;">Target User:</td><td style="color:var(--text-primary); font-weight:600;">${safe(ev.username)}</td></tr>
-                      <tr><td style="color:var(--text-muted); padding:2px 0;">Agent ID:</td><td style="color:var(--text-primary);">${safe(ev.agent_id)}</td></tr>
-                      <tr><td style="color:var(--text-muted); padding:2px 0;">Hostname:</td><td style="color:var(--text-primary);">${safe(ev.hostname)}</td></tr>
-                      <tr><td style="color:var(--text-muted); padding:2px 0;">Time:</td><td style="color:var(--text-primary);">${ago(ev.created_at)} (${new Date(ev.created_at).toLocaleString()})</td></tr>
-                  </table>
-                  
-                  <div style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 10px; font-size: 12px; margin-bottom: 12px;">
-                      <div style="color:var(--text-muted); margin-bottom: 4px;">Top Anomalous Features (Summary):</div>
-                      <div style="color:var(--text-primary);">${safe(ev.summary)}</div>
-                      ${paramHTML}
-                  </div>
-                  
-                  <div style="display:flex; gap: 12px; font-size: 11px; margin-bottom: 12px;">
-                      <div style="background:var(--bg-secondary); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-primary);">
-                          <div style="color:var(--text-muted); margin-bottom: 2px;">Random Forest</div>
-                          <div style="color:white; font-weight:600;">Score: ${rfScore} <span style="color:var(--text-muted);font-weight:400;margin-left:4px;">(Conf: ${rfConf})</span></div>
-                      </div>
-                      <div style="background:var(--bg-secondary); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-primary);">
-                          <div style="color:var(--text-muted); margin-bottom: 2px;">Isolation Forest</div>
-                          <div style="color:white; font-weight:600;">Score: ${ifScore}</div>
-                      </div>
-                  </div>
-                  
-                  <div style="display:flex; flex-direction:column; gap:4px; margin-top:8px;">
-                      ${tagsHTML}
-                  </div>
-              </div>
-              `;
-          }).join('');
-          
-          container.innerHTML = html;
-      }
-
       /* ============================== INIT ============================== */
       async function refreshAll() {
         await loadKPIs();
@@ -1754,33 +1567,10 @@
         if (selectedDrillUser) drillDown(selectedDrillUser);
       }
 
-      async function retrainModels() {
-         const btn = document.getElementById('btnRetrain');
-         btn.innerText = "Retraining...";
-         btn.disabled = true;
-         try {
-             const res = await fetch('/api/model/recalibrate', {
-                 method: 'POST',
-                 headers: {'Content-Type': 'application/json'},
-                 body: JSON.stringify({days: 30})
-             });
-             const data = await res.json();
-             if (data.ok) {
-                 alert("Models Retrained Successfully!\n\nRandom Forest: " + data.result.random_forest.accuracy + " accuracy\nIsolation Forest: " + data.result.isolation_forest.status);
-             } else {
-                 alert("Retraining failed: " + data.error);
-             }
-         } catch (e) {
-             alert("Error connecting to API: " + e);
-         } finally {
-             btn.innerText = "Retrain Models";
-             btn.disabled = false;
-         }
-      }
-
       async function init() {
         await refreshAll();
-        if (autoRefresh) startRefreshTimer();
+        // Automatically fetch and update data dynamically in the background every 3 seconds without page reload
+        setInterval(refreshAll, REFRESH_INTERVAL);
       }
       init().catch(console.error);
     </script>
