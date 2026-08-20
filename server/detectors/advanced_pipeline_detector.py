@@ -100,9 +100,12 @@ class AdvancedPipelineDetector(Detector):
                 for row in reversed(rows):  # oldest → newest
                     day_features = row.get("features") or {}
                     if day_features:
+                        # Zero-pad any missing historical features using today's comprehensive feature list
+                        padded_features = {k: 0.0 for k in features.keys()}
+                        padded_features.update({k: float(v or 0.0) for k, v in day_features.items()})
                         sequence.append({
                             "date": str(row.get("date", "")),
-                            "features": {k: float(v or 0.0) for k, v in day_features.items()},
+                            "features": padded_features,
                         })
             except Exception as exc:
                 logger.warning(f"[AdvancedPipeline] Could not load history for {username}: {exc}")

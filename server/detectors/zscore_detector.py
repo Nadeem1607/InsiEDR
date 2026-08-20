@@ -41,7 +41,7 @@ class ZScoreDetector(Detector):
                 continue
                 
             mean = baseline.feature_means.get(feature_name, 0.0)
-            std = max(baseline.feature_stds.get(feature_name, 1.0), 1.0)
+            std = max(baseline.feature_stds.get(feature_name, 10.0), 10.0, abs(mean) * 0.25)
             
             z = (current_val - mean) / std
             
@@ -55,7 +55,7 @@ class ZScoreDetector(Detector):
                     
         if max_z > self.threshold:
             result["is_anomaly"] = True
-            result["score"] = min(max_z * 10.0, 100.0)
-            result["reason"] = f"Significant deviation in feature {top_feature} (Z-score: {max_z:.2f})."
+            result["score"] = min(max_z * 5.0, 100.0)
+            result["reason"] = f"Significant statistical spike in feature {top_feature} (Z-score: {max_z:.2f})."
             
         return result

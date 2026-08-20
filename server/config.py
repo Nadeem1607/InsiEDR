@@ -41,11 +41,11 @@ class ServerConfig:
     @property
     def require_https(self) -> bool:
         return os.environ.get("INSIEDR_REQUIRE_HTTPS", "true").lower() in ("1", "true", "yes")
-        
+
     @property
     def agent_bearer_token(self) -> str | None:
         return os.environ.get("INSIEDR_AGENT_BEARER_TOKEN")
-        
+
     @property
     def active_model_version(self) -> str:
         """The currently active ML artifact schema version (e.g., 'v2')."""
@@ -96,11 +96,11 @@ class ServerConfig:
     @property
     def zscore_calibration_threshold(self) -> float:
         """Dynamic calibration cutoff for Z-Score models."""
-        raw = os.environ.get("INSIEDR_ZSCORE_CALIBRATION_THRESHOLD", "3.0")
+        raw = os.environ.get("INSIEDR_ZSCORE_CALIBRATION_THRESHOLD", "8.0")
         try:
             return float(raw)
         except ValueError:
-            return 3.0
+            return 8.0
 
     @property
     def enable_fernet(self) -> bool:

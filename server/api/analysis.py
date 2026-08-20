@@ -11,8 +11,8 @@ def get_pc_status():
     storage = current_app.extensions.get("insiedr_storage")
     if storage is None:
         return jsonify({"ok": False, "error": "storage is not configured"}), 503
-    
-    seconds = int(request.args.get("seconds", 15))
+
+    seconds = int(request.args.get("seconds", 300))
     try:
         status = storage.get_pc_status(seconds_since_online=seconds)
         return jsonify({"ok": True, **status})
@@ -26,7 +26,7 @@ def get_user_collectors(username: str):
     storage = current_app.extensions.get("insiedr_storage")
     if storage is None:
         return jsonify({"ok": False, "error": "storage is not configured"}), 503
-    
+
     try:
         collectors = storage.get_user_collectors(username)
         return jsonify({"ok": True, "username": username, "collectors": collectors})
@@ -40,8 +40,8 @@ def get_user_risk_scores(username: str):
     storage = current_app.extensions.get("insiedr_storage")
     if storage is None:
         return jsonify({"ok": False, "error": "storage is not configured"}), 503
-    
-    limit = int(request.args.get("limit", 30))
+
+    limit = int(request.args.get("limit", 50))
     try:
         risk_scores = storage.get_user_risk_scores(username, limit=limit)
         for rs in risk_scores:
@@ -53,15 +53,53 @@ def get_user_risk_scores(username: str):
 
 @bp.route("/user-predictions/<username>", methods=["GET"])
 def get_user_predictions(username: str):
-    """Returns latest model predictions for a user"""
+    """Returns latest model predictions for a user, enriched for UI consumption"""
     storage = current_app.extensions.get("insiedr_storage")
     if storage is None:
         return jsonify({"ok": False, "error": "storage is not configured"}), 503
-    
+
     try:
-        predictions = storage.get_user_predictions(username)
-        if predictions is None:
+        raw_predictions = storage.get_user_predictions(username)
+        if raw_predictions is None:
             return jsonify({"ok": True, "username": username, "predictions": None, "message": "No predictions available"}), 200
+
+        st = raw_predictions.get("short_term") or {}
+        contrib = st.get("contributions") or {}
+
+        scenario_name = contrib.get("predicted_scenario") or "normal"
+        scenario_conf = float(contrib.get("scenario_confidence", st.get("confidence", 0.0)))
+        rvfl_err = float(contrib.get("rvfl_error", 0.0))
+        score = float(st.get("score", 0.0))
+
+        # Determine behavioral risk level and recommended protocol
+        if rvfl_err >= 0.08 or score >= 85.0:
+            b_risk = "CRITICAL" if score >= 85.0 else "HIGH"
+            action = "Isolate endpoint and revoke active sessions immediately."
+        elif rvfl_err >= 0.03 or score >= 60.0:
+            b_risk = "HIGH" if score >= 60.0 else "MEDIUM"
+            action = "Escalate for analyst review; monitor telemetry closely."
+        elif score >= 35.0:
+            b_risk = "MEDIUM"
+            action = "Minor baseline variance detected; standard monitoring."
+        else:
+            b_risk = "LOW"
+            action = "Normal baseline behavior; no action required."
+
+        predictions = {
+            "behavioral_risk": b_risk,
+            "rvfl_error": rvfl_err,
+            "score": score,
+            "confidence": scenario_conf,
+            "predicted_scenario": {
+                "scenario": scenario_name,
+                "confidence": scenario_conf,
+            },
+            "recommended_action": action,
+            "domain_scores": contrib.get("domain_scores", {}),
+            "summary": st.get("summary", ""),
+            "short_term": st,
+            "long_term": raw_predictions.get("long_term"),
+        }
         return jsonify({"ok": True, "username": username, "predictions": predictions})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -73,14 +111,14 @@ def get_user_analysis(username: str):
     storage = current_app.extensions.get("insiedr_storage")
     if storage is None:
         return jsonify({"ok": False, "error": "storage is not configured"}), 503
-    
+
     try:
         collectors = storage.get_user_collectors(username)
-        risk_scores = storage.get_user_risk_scores(username, limit=30)
+        risk_scores = storage.get_user_risk_scores(username, limit=50)
         for rs in risk_scores:
             _patch_risk_level(rs)
         predictions = storage.get_user_predictions(username)
-        
+
         return jsonify({
             "ok": True,
             "username": username,
@@ -95,13 +133,14 @@ def get_user_analysis(username: str):
 def _patch_risk_level(event: dict):
     level = (event.get("risk_level") or "").upper()
     score = float(event.get("risk_score") or 0.0)
-    if not level or level == "NONE":
-        if score >= 80: level = "CRITICAL"
-        elif score >= 60: level = "HIGH"
-        elif score >= 30: level = "MEDIUM"
+    if not level or level in ["NONE", "INFO"]:
+        if score >= 85.0: level = "CRITICAL"
+        elif score >= 60.0: level = "HIGH"
+        elif score >= 35.0: level = "MEDIUM"
         else: level = "LOW"
     event["risk_level"] = level
     event["_computed_level"] = level
+
 
 @bp.route("/risk-events", methods=["GET"])
 def get_risk_events():
@@ -109,8 +148,8 @@ def get_risk_events():
     storage = current_app.extensions.get("insiedr_storage")
     if storage is None:
         return jsonify({"ok": False, "error": "storage is not configured"}), 503
-    
-    limit = int(request.args.get("limit", 200))
+
+    limit = int(request.args.get("limit", 500))
     offset = int(request.args.get("offset", 0))
     try:
         risk_events = storage.list_risk_events(limit=limit, offset=offset)
@@ -120,16 +159,17 @@ def get_risk_events():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
 @bp.route("/dashboard-summary", methods=["GET"])
 def dashboard_summary():
-    """Aggregated dashboard data in a single call."""
+    """Aggregated dashboard data in a single high-performance call."""
     storage = current_app.extensions.get("insiedr_storage")
     if storage is None:
         return jsonify({"ok": False, "error": "storage is not configured"}), 503
 
     try:
-        pc_status = storage.get_pc_status(seconds_since_online=15)
-        risk_events = storage.list_risk_events(limit=200, offset=0)
+        pc_status = storage.get_pc_status(seconds_since_online=300)
+        risk_events = storage.list_risk_events(limit=1000, offset=0)
         anomalies = storage.list_anomalies(limit=100, offset=0)
         agents = storage.list_agents(limit=500, offset=0)
         stats = storage.get_stats()
@@ -137,17 +177,47 @@ def dashboard_summary():
         for event in risk_events:
             _patch_risk_level(event)
 
-        # Pre-compute risk category counts from latest risk event per user
+        # Pre-compute risk category counts across all agents in the fleet
         user_latest_risk: dict[str, dict] = {}
         for event in risk_events:
             user = event.get("username") or "unknown"
             if user not in user_latest_risk:
                 user_latest_risk[user] = event
 
-        critical_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "CRITICAL")
-        high_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "HIGH")
-        medium_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "MEDIUM")
-        low_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "LOW")
+        # Build unique endpoint keys from agents
+        unique_endpoints = set()
+        for a in agents:
+            key = a.get("username_last_seen") or a.get("hostname")
+            if key:
+                unique_endpoints.add(key)
+
+        critical_count = 0
+        high_count = 0
+        medium_count = 0
+        low_count = 0
+
+        for ep in unique_endpoints:
+            ev = user_latest_risk.get(ep)
+            if ev:
+                level = (ev.get("_computed_level") or ev.get("risk_level") or "LOW").upper()
+                if level == "CRITICAL":
+                    critical_count += 1
+                elif level == "HIGH":
+                    high_count += 1
+                elif level == "MEDIUM":
+                    medium_count += 1
+                else:
+                    low_count += 1
+            else:
+                # Any active agent with zero anomalies is baseline LOW
+                low_count += 1
+
+        # Fallback if agents table was empty
+        if not unique_endpoints:
+            critical_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "CRITICAL")
+            high_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "HIGH")
+            medium_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "MEDIUM")
+            low_count = sum(1 for e in user_latest_risk.values() if e.get("_computed_level") == "LOW")
 
         # Build unique user list from agents table
         users = sorted({str(a.get("username_last_seen") or "") for a in agents if a.get("username_last_seen")})
@@ -169,7 +239,7 @@ def dashboard_summary():
             "agents": agents,
             "users": users,
             "stats": stats,
-            "total_risk_events": len(risk_events),
+            "total_risk_events": stats.get("risk_events", len(risk_events)),
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

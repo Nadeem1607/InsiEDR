@@ -258,13 +258,13 @@ class ModelBridge:
                         "agent_id": agent_id,
                         "username": username,
                         "risk_score": 0.0,
-                        "risk_level": "info",
+                        "risk_level": "low",
                         "correlated_signals_json": {
                             "heuristics": {
                                 "overall_score": 0, 
-                                "overall_severity": "INFO", 
+                                "overall_severity": "LOW", 
                                 "scenario_count": 1, 
-                                "detections": [{"scenario": "System Idle", "score": 0, "severity": "INFO", "confidence": "HIGH", "reasons": ["No telemetry activity"]}]
+                                "detections": [{"scenario": "System Idle", "score": 0, "severity": "LOW", "confidence": "HIGH", "reasons": ["No telemetry activity"]}]
                             }
                         },
                         "summary": "System Idle",

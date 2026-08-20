@@ -79,9 +79,9 @@ class BaselineEngine:
                     updated_mean = (1 - self.decay) * prev_mean + self.decay * daily_avg
                     current.feature_means[feature] = updated_mean
                     
-                    prev_std = current.feature_stds.get(feature, 1.0)
+                    prev_std = current.feature_stds.get(feature, 10.0)
                     updated_std = (1 - self.decay) * prev_std + self.decay * abs(daily_avg - updated_mean)
-                    current.feature_stds[feature] = max(updated_std, abs(updated_mean) * 0.05, 1.0)
+                    current.feature_stds[feature] = max(updated_std, abs(updated_mean) * 0.25, 10.0)
             
             # Reset buffer
             current.short_term_sums = {}

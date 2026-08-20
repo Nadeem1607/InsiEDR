@@ -21,12 +21,12 @@ def get_tamper_alerts():
 	storage = current_app.extensions.get("insiedr_storage")
 	if storage is None:
 		return jsonify({"ok": False, "error": "storage is not configured", "alerts": []}), 503
-	
+
 	limit = int(request.args.get("limit", 50))
 	try:
 		# Fetch recent risk events (a larger window since tamper events might be rare)
 		risk_events = storage.list_risk_events(limit=500, offset=0)
-		
+
 		tamper_alerts = []
 		for ev in risk_events:
 			try:
@@ -36,26 +36,26 @@ def get_tamper_alerts():
 					signals = json.loads(signals)
 				elif signals is None:
 					signals = {}
-				
+
 				# Check if tamper detector fired
 				if signals.get("tamper_detector", {}).get("is_anomaly") is True:
 					# Patch risk level for consistency with UI expectations
 					level = (ev.get("risk_level") or "").upper()
-					if not level or level == "NONE":
+					if not level or level in ["NONE", "INFO"]:
 						score = float(ev.get("risk_score") or 0.0)
-						if score >= 80: level = "CRITICAL"
-						elif score >= 60: level = "HIGH"
-						elif score >= 30: level = "MEDIUM"
+						if score >= 85.0: level = "CRITICAL"
+						elif score >= 60.0: level = "HIGH"
+						elif score >= 35.0: level = "MEDIUM"
 						else: level = "LOW"
 					ev["risk_level"] = level
-					
+
 					tamper_alerts.append(ev)
 			except Exception:
 				continue
-			
+
 			if len(tamper_alerts) >= limit:
 				break
-				
+
 		return jsonify({"ok": True, "alerts": tamper_alerts})
 	except Exception as e:
 		return jsonify({"ok": False, "error": str(e), "alerts": []}), 500
