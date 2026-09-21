@@ -24,6 +24,7 @@ scikit-learn==1.7.2; python_version >= "3.9"
 torch>=2.0,<2.5; python_version < "3.9"
 torch>=2.0; python_version >= "3.9"
 xgboost>=2.0.0
+imbalanced-learn>=0.11.0
 
 # Testing
 pytest>=7.0

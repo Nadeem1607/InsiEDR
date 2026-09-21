@@ -11,6 +11,7 @@ from xgboost import XGBClassifier
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import Ridge
 from sklearn.metrics import classification_report, confusion_matrix
+from imblearn.over_sampling import SMOTE
 
 # Ensure final_model directory is in python path for importing local components
 final_model_dir = os.path.dirname(os.path.abspath(__file__))
@@ -205,7 +206,7 @@ def main():
     
     raw_features_path = os.path.join(latest_data_dir, "raw_features.csv")
     enriched_features_path = os.path.join(latest_data_dir, "if_enriched_features.csv")
-    raw_logs_dir = os.path.join(new_model_dir, "INPUT_LOGS")
+    raw_logs_dir = r"D:\AISH\final_model_clone\InsiEDR\final_model\INPUT_LOGS"
     labels_csv_path = os.path.join(raw_logs_dir, "OUTPUT_LABELS", "insider_labels.csv")
     
     # -------------------------------------------------------------------------
@@ -303,7 +304,7 @@ def main():
     # -------------------------------------------------------------------------
     # EVALUATION 1: Isolation Forest Confusion Matrices (Saved to confusion_matrices/isolation_forest/)
     # -------------------------------------------------------------------------
-    labeled_df_if = create_labels(feature_df, labels_df, trailing_days=None)
+    labeled_df_if = create_labels(feature_df, labels_df, trailing_days=10)
     test_df_if = labeled_df_if[labeled_df_if["user"].isin(test_users) & (labeled_df_if["label"] != -1)].copy()
     y_test_binary = (test_df_if["label"] > 0).astype(int)
 
@@ -340,7 +341,7 @@ def main():
     print("STAGE 3: MULTICLASS XGBOOST SCENARIO CLASSIFIER")
     print("=" * 80)
 
-    labeled_df_new = create_labels(feature_df, labels_df, trailing_days=None)
+    labeled_df_new = create_labels(feature_df, labels_df, trailing_days=10)
     valid_labeled_new = labeled_df_new[labeled_df_new["label"] != -1]
     
     train_df_new = valid_labeled_new[valid_labeled_new["user"].isin(train_users)].copy()
@@ -355,27 +356,15 @@ def main():
     X_test_xgb = test_df_new[xgb_feature_cols].fillna(0)
     y_test_xgb = test_df_new["label"]
     
-    # Balanced random oversampling on training split
+    # SMOTE oversampling on training split (generates synthetic interpolated samples)
     train_dist = y_train_xgb.value_counts().sort_index()
     class_0_count = int(train_dist[0]) if 0 in train_dist else 1000
-        
-    oversampled_X = []
-    oversampled_y = []
-    for c in range(6):
-        c_X = X_train_xgb[y_train_xgb == c]
-        c_y = y_train_xgb[y_train_xgb == c]
-        if len(c_X) > 0:
-            c_X_samp = c_X.sample(n=class_0_count, replace=True, random_state=42)
-            c_y_samp = c_y.sample(n=class_0_count, replace=True, random_state=42)
-            oversampled_X.append(c_X_samp)
-            oversampled_y.append(c_y_samp)
-            
-    if oversampled_X:
-        X_train_smote = pd.concat(oversampled_X)
-        y_train_smote = pd.concat(oversampled_y)
-    else:
-        X_train_smote = X_train_xgb
-        y_train_smote = y_train_xgb
+    sampling_strategy = {c: class_0_count for c in range(1, 6) if c in train_dist.index}
+    smote = SMOTE(sampling_strategy=sampling_strategy, random_state=42, k_neighbors=3)
+    X_train_smote, y_train_smote = smote.fit_resample(X_train_xgb, y_train_xgb)
+    
+    print("Class distribution after SMOTE:")
+    print(pd.Series(y_train_smote).value_counts().sort_index())
     
     xgb_multi = XGBClassifier(
         objective="multi:softprob",

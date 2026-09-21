@@ -1,0 +1,15 @@
+XGBOOST CLASSIFICATION REPORT (FIXED: trailing_days=10 + SMOTE)
+================================================================================
+
+              precision    recall  f1-score   support
+
+      normal     0.9999    0.9997    0.9998     12686
+ email_exfil     0.8261    0.9500    0.8837        20
+    sabotage     1.0000    1.0000    1.0000        20
+   usb_exfil     1.0000    1.0000    1.0000        20
+ flight_risk     0.9524    1.0000    0.9756        20
+ cloud_exfil     1.0000    0.9500    0.9744        20
+
+    accuracy                         0.9995     12786
+   macro avg     0.9631    0.9833    0.9722     12786
+weighted avg     0.9996    0.9995    0.9995     12786

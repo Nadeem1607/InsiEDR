@@ -1,0 +1,7 @@
+,Pred_normal,Pred_email_exfil,Pred_sabotage,Pred_usb_exfil,Pred_flight_risk,Pred_cloud_exfil
+Actual_normal,12682,4,0,0,0,0
+Actual_email_exfil,1,19,0,0,0,0
+Actual_sabotage,0,0,20,0,0,0
+Actual_usb_exfil,0,0,0,20,0,0
+Actual_flight_risk,0,0,0,0,20,0
+Actual_cloud_exfil,0,0,0,0,1,19
