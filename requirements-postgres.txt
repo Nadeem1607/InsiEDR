@@ -1,3 +1,0 @@
-# Optional PostgreSQL runtime dependency.
-# Install this only on machines that need Postgres-backed storage.
-psycopg2-binary>=2.9,<3
