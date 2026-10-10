@@ -1,5 +1,17 @@
 # InsiEDR: Insider Threat Endpoint Detection & Response
 
+## Model-Updated Branch
+
+This branch contains the SHAP-integrated, training-only-Isolation-Forest-fit
+pipeline and its aligned server/dashboard integration. The canonical training
+entry point is `model/run_new_model.py`; deployment uses a complete exported
+bundle at `model/artifacts/shap_v1` or `INSIEDR_MODEL_BUNDLE_DIR`.
+
+See [SHAP Integration](model/SHAP_INTEGRATION.md) for setup, required input labels,
+artifact contracts, explanation outputs, verification and remaining limitations.
+Generated trained bundles are not included in this update. This branch does not
+change `phase-2-updates` and is not a production-readiness claim.
+
 Welcome to **InsiEDR**, a sophisticated Endpoint Detection and Response (EDR) system engineered to detect, classify, and mitigate insider threats across a fleet of Windows endpoints. 
 
 InsiEDR leverages a multi-layered detection pipeline combining traditional deterministic heuristics with advanced Machine Learning—specifically, Isolation Forests, Random Vector Functional Link (RedRVFL) neural networks for temporal sequential modeling, and XGBoost for explicit threat scenario classification.
@@ -32,19 +44,38 @@ InsiEDR operates on a zero-trust **Client-Server architecture** designed to secu
 When telemetry arrives at the server, it passes through three distinct analytical engines to determine the risk level and threat scenario.
 
 ### 2.1 The Anomaly Detector (Isolation Forest)
-The first layer is an **Isolation Forest** model (`iforest_model.pkl`). It is an unsupervised anomaly detection algorithm that treats normal behavior as the baseline. 
-- **Purpose**: To catch "unknown unknowns" or zero-day anomalous behaviors that don't fit explicit rules.
-- **Output**: Generates a base `overall_score` (0 to 100) and localized `domain_scores` pinpointing exactly which domain (File, Logon, Device, HTTP) is experiencing the anomaly.
+The first tier uses four domain **Isolation Forests**, saved together as
+`domain_isolation_forest.pkl`. Fitting uses training-user observations only;
+held-out users are scored without entering the fit.
+- **Purpose**: Produce separate logon, file, device and HTTP anomaly signals.
+- **Output**: Four continuous domain scores and a fixed weighted risk sum,
+  normalized using the exported training-only divisor and capped at 1.
+  All daily rows continue to classification; this is not a hard filtering gate.
 
 ### 2.2 The Scenario Classifier (XGBoost)
-Telemetry features are then fed into a supervised **XGBoost Classifier** (`scenario_xgb.pkl`).
-- **Purpose**: To explicitly classify the exact *type* of threat occurring. 
-- **Output**: The model outputs a probability distribution across known threat scenarios (e.g., `s1`, `s2`, `s3`, `normal`). 
+The supervised **XGBoost Classifier** (`xgb_model.pkl`) consumes 40 ordered
+behavioral and derived risk/trend inputs. SMOTE balances training rows only.
+- **Purpose**: Classify each daily observation into a modeled scenario.
+- **Output**: Probabilities for `normal`, `email_exfil`, `sabotage`, `usb_exfil`,
+  `flight_risk` and `cloud_exfil`. These are not automatically calibrated
+  probabilities of a real workplace incident.
 
 ### 2.3 The Temporal Sequence Modeler (RedRVFL)
-The outputs of the XGBoost model (the scenario probabilities) are injected back into the user's historical sequence of behaviors. This sequence is then fed into a **Random Vector Functional Link (RedRVFL) Network**.
-- **Purpose**: Traditional models look at single points in time. Insider threats (like data hoarding followed by exfiltration) play out over time. RedRVFL is designed to understand the *sequential temporal risk*.
-- **Output**: Produces a highly accurate, time-aware `behavioral_risk` score (0-100) and identifies the dominant `predicted_scenario` with a confidence percentage.
+Fused risk is `0.3 * overall_risk + 0.7 * max(threat_probabilities)`.
+Seven preceding observations predict the next observation using training-fitted
+scalers, five frozen random LSTM feature layers and five fitted ridge readouts.
+- **Purpose**: Measure deviations from expected sequential fused risk.
+- **Output**: Squared target-scaled prediction errors and user ranking score
+  `score_v2 = max_error * mean_error * sqrt(sequence_count)`. The live 0-100
+  display adapter is not a threat probability. Fewer than eight observations
+  uses explicit IF/XGBoost warmup with no fabricated `score_v2`.
+
+### 2.3.1 Explanation Layer (SHAP)
+Score decomposition and highest-error dates connect the ranking to its daily
+evidence. Signed local XGBoost SHAP values explain class raw margins, not the
+entire `score_v2` or employee intent. Explanations are exported in batch and
+carried through live JSONB storage, APIs and dashboard user drill-downs without
+changing detection scores. See the integration guide for the complete scope.
 
 ### 2.4 The Deterministic Rules Engine (Heuristics)
 Machine learning is powerful, but deterministic rules are required for absolute certainty on known bad behaviors. The Heuristics engine runs in parallel:

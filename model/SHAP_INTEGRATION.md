@@ -1,7 +1,28 @@
 # SHAP Model Integration
 
-Local branch: `shap-model-integration`, based on `phase-2-updates` at `69aa7df`.
-Nothing is pushed to GitHub. The separate standalone SHAP project is unchanged.
+Branch: `Model-Updated`, based on `phase-2-updates` at `69aa7df`.
+The verified integration originates from commit `13384ea` on the local
+`shap-model-integration` branch. `phase-2-updates` and the separate standalone
+SHAP project are unchanged.
+
+This branch includes the training pipeline, explanation helpers, regression
+tests, dependency pins, and the server/dashboard changes needed to carry SHAP
+evidence through the existing application. Generated model bundles, environments,
+local runtime credentials, experiment outputs, and presentation documents are
+not included in this update.
+
+Clone this branch separately:
+
+```powershell
+git clone --branch Model-Updated --single-branch https://github.com/Nadeem1607/InsiEDR.git InsiEDR-Model-Updated
+cd InsiEDR-Model-Updated
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Before training, supply `OUTPUT_LABELS/insider_labels.csv` for the same users as
+the behavioral feature input. Follow the training instructions below to export
+the complete bundle; cloning source code alone does not deploy trained artifacts.
 
 ## Pipeline
 
