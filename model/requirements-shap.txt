@@ -1,0 +1,10 @@
+# Exact versions used by the verified SHAP bundle. Python 3.12 required.
+numpy==2.5.2
+pandas==3.0.5
+scipy==1.18.0
+scikit-learn==1.9.0
+torch==2.13.0
+xgboost==3.4.1
+shap==0.52.0
+joblib==1.5.3
+imbalanced-learn==0.14.2

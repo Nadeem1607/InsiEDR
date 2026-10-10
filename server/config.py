@@ -132,17 +132,14 @@ class ServerConfig:
 
     @property
     def g_model_models_dir(self) -> str:
-        """
-        Resolves to the G-model's artifact directory (latest_data/models/).
-        All .pkl files are loaded from InsiEDR-G-model-latest-dataset IN-PLACE.
-        Nothing is copied or moved.
-        """
-        base = self.model_inference_dir
-        candidate = os.path.join(base, "latest_data", "models")
-        if os.path.isdir(candidate):
-            return candidate
-        # Fallback: if pointed at old-style layout where models/ sits at the root
-        return os.path.join(base, "models")
+        """Use one complete SHAP bundle; never silently select old artifacts."""
+        return os.environ.get("INSIEDR_MODEL_BUNDLE_DIR", os.path.join(
+            self.model_inference_dir, "artifacts", "shap_v1"))
+
+    @property
+    def model_history_observations(self) -> int:
+        """Bound live work; score_v2 covers this supplied history, not lifetime."""
+        return max(8, min(int(os.environ.get("INSIEDR_MODEL_HISTORY_OBSERVATIONS", "128")), 1000))
 
     @property
     def fernet_key_env(self) -> str | None:

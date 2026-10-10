@@ -53,3 +53,7 @@ desktop.ini
 
 model/INPUT_LOGS/*.csv
 *.csv
+
+# Generated model bundles (export with model/run_new_model.py).
+model/artifacts/
+model/integration_runs/

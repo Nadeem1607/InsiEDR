@@ -28,6 +28,8 @@ def health():
         model_pipeline = "missing_artifacts"
     elif model_readiness["missing_dependencies"]:
         model_pipeline = "missing_dependencies"
+    elif model_readiness["bundle_errors"]:
+        model_pipeline = "incompatible_bundle"
     else:
         model_pipeline = "disabled"
     return jsonify(
@@ -41,6 +43,8 @@ def health():
             "model_pipeline": model_pipeline,
             "model_missing_artifacts": model_readiness["missing_artifacts"],
             "model_missing_dependencies": model_readiness["missing_dependencies"],
+            "model_bundle_errors": model_readiness["bundle_errors"],
+            "model_version": model_readiness["model_version"],
             "auth": "not_configured",
         }
     )

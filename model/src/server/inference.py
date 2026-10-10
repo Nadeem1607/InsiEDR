@@ -1,806 +1,309 @@
-import os
+"""Inference for the exported leakage-corrected IF/XGBoost/RedRVFL bundle."""
+import hashlib
 import json
-import warnings
+from importlib.metadata import version
+from pathlib import Path
+from functools import lru_cache
+import threading
+
 import joblib
 import numpy as np
+import pandas as pd
+import shap
 import torch
-from src.red_revfl_orchestrator import RedRVFLOrchestrator
-from src.server.features.feature_schema import (
-    LOGON_FEATURES,
-    FILE_FEATURES,
-    DEVICE_FEATURES,
-    HTTP_FEATURES
-)
+import xgboost as xgb
+
+from src.score_explanations import normalize_shap_values, check_shap_additivity
+from src.server.features.feature_schema import IF_GROUPS
+
 
 class InferenceEngine:
-    """
-    Stateless inference engine for the Insider Threat Detection System.
-    Loads persisted Isolation Forest and RedRVFL models, validates input sequences,
-    scores them, and fuses the scores.
-    """
     def __init__(self, models_dir=None):
-        from src.run.config import get_all_configs
-
-        config = get_all_configs()[0]
-
-        self.if_weight = config["IF_weight"]
-        self.xgb_weight = config["XGB_weight"]
-        self.rvfl_orchestrator = None
-        if models_dir is None:
-            models_dir = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "models")
-            )
-        self.models_dir = models_dir
-        self.domain_if = None
-        self.feature_scaler = None
-        self.ridge_models = None
-        self.rvfl_metadata = None
-        self.feature_columns = None
-        self.scenario_model = None
-        self.scenario_features = None   
+        root = Path(__file__).resolve().parents[3]
+        self.models_dir = Path(models_dir or root / "artifacts/shap_v1")
+        self._lock = threading.RLock()
         self._load_models()
 
     def _load_models(self):
-        if_path = os.path.join(self.models_dir, "domain_isolation_forest.pkl")
-        scaler_path = os.path.join(self.models_dir, "feature_scaler.pkl")
-        ridge_path = os.path.join(self.models_dir, "ridge_models.pkl")
-        metadata_path = os.path.join(self.models_dir, "rvfl_metadata.json")
-        columns_path = os.path.join(self.models_dir, "feature_columns_IF.json")
+        config_path = self.models_dir / "pipeline_config.json"
+        self.config = json.loads(config_path.read_text(encoding="utf-8"))
+        if self.config.get("schema_version") != 1:
+            raise ValueError("Unsupported pipeline bundle schema.")
+        for package, expected in self.config["versions"].items():
+            actual = version(package)
+            if actual != expected:
+                raise ValueError(f"Bundle requires {package}=={expected}; found {actual}.")
+        for name, expected in self.config["sha256"].items():
+            if Path(name).name != name:
+                raise ValueError("Invalid artifact path in bundle manifest.")
+            if hashlib.sha256((self.models_dir / name).read_bytes()).hexdigest() != expected:
+                raise ValueError(f"Bundle checksum mismatch: {name}")
+        self.domain_if = joblib.load(self.models_dir / "domain_isolation_forest.pkl")
+        self.feature_scaler = joblib.load(self.models_dir / "feature_scaler.pkl")
+        self.target_scaler = joblib.load(self.models_dir / "target_scaler.pkl")
+        self.ridge_models = joblib.load(self.models_dir / "rvfl_ridge_models.pkl")
+        # Load the trained random feature layers, rather than generating new ones.
+        self.rvfl_orchestrator = joblib.load(self.models_dir / "rvfl_model.pkl")
+        self.scenario_model = joblib.load(self.models_dir / "xgb_model.pkl")
+        self.scenario_features = json.loads(
+            (self.models_dir / "scenario_xgb_features.json").read_text(encoding="utf-8"))
+        self.feature_columns = json.loads(
+            (self.models_dir / "feature_columns_IF.json").read_text(encoding="utf-8"))
+        self.scenario_names = self.config["scenario_names"]
+        self.rvfl_metadata = {"sequence_length": self.config["sequence_length"]}
+        self.if_weight = self.config["fusion_weights"]["isolation_forest"]
+        self.xgb_weight = self.config["fusion_weights"]["xgboost"]
+        self._explainer = None
+        if not np.array_equal(self.scenario_model.classes_, np.arange(len(self.scenario_names))):
+            raise ValueError("Scenario class ordering differs from the bundle contract.")
 
-        # Load domain isolation forest
-        if not os.path.exists(if_path):
-            raise FileNotFoundError(f"Persisted Isolation Forest model not found at {if_path}")
-        self.domain_if = joblib.load(if_path)
+    def _raw_features(self, features):
+        values = {}
+        for name in self.feature_columns:
+            value = features.get(name, 0.0)
+            if value is None or (isinstance(value, (float, np.floating)) and np.isnan(value)):
+                value = 0.0
+            value = float(value)
+            if not np.isfinite(value):
+                raise ValueError(f"Nonfinite feature: {name}")
+            values[name] = value
+        return values
 
-        # Load feature scaler
-        if not os.path.exists(scaler_path):
-            raise FileNotFoundError(f"Persisted feature scaler not found at {scaler_path}")
-        self.feature_scaler = joblib.load(scaler_path)
+    def _enrich(self, daily_sequence):
+        if not daily_sequence:
+            raise ValueError("At least one observation is required.")
+        dates = pd.to_datetime([day["date"] for day in daily_sequence], utc=True).normalize()
+        if dates.hasnans or dates.duplicated().any():
+            raise ValueError("Daily observations require unique valid UTC dates.")
+        frame = pd.DataFrame([self._raw_features(day["features"]) for day in daily_sequence])
+        frame["date"] = dates
+        frame = frame.sort_values("date").reset_index(drop=True)
+        matrices = [frame[columns].fillna(0).to_numpy() for columns in IF_GROUPS.values()]
+        scores = self.domain_if.score(*matrices)
+        for domain in IF_GROUPS:
+            frame[f"{domain}_risk"] = scores[domain]
+        frame["raw_overall_risk"] = sum(
+            weight * frame[column] for column, weight in self.config["domain_weights"].items())
+        frame["overall_risk"] = np.minimum(
+            frame["raw_overall_risk"] / self.config["normalization_divisor"], 1.0)
+        frame["daily_risk_delta"] = frame["overall_risk"].diff().fillna(0)
+        frame["daily_risk_rolling_mean_7d"] = frame["overall_risk"].rolling(7, min_periods=1).mean()
+        frame["daily_risk_rolling_std_7d"] = frame["overall_risk"].rolling(7, min_periods=1).std().fillna(0)
+        return frame
 
-        # Load ridge models
-        if not os.path.exists(ridge_path):
-            raise FileNotFoundError(f"Persisted ridge models not found at {ridge_path}")
-        self.ridge_models = joblib.load(ridge_path)
+    def _probabilities(self, frame):
+        return self.scenario_model.predict_proba(frame[self.scenario_features].fillna(0))
 
-        if not os.path.exists(metadata_path):
-            raise FileNotFoundError(
-                f"Persisted RVFL metadata not found at {metadata_path}"
-            )
+    def _scenario_result(self, probabilities):
+        winner = int(np.argmax(probabilities))
+        return {"scenario": self.scenario_names[winner], "confidence": float(probabilities[winner]),
+                **{f"rf_{name}_prob": float(probabilities[i])
+                   for i, name in enumerate(self.scenario_names)}}
 
-        with open(metadata_path, "r") as f:
-            self.rvfl_metadata = json.load(f)
+    def predict_current_risk(self, payload):
+        frame = self._enrich([{"date": "2000-01-01", "features": payload["features"]}])
+        row = frame.iloc[0]
+        score = float(row.overall_risk)
+        return {"detector": "isolation_forest", "overall_score": score,
+                "raw_overall_risk": float(row.raw_overall_risk),
+                "risk_level": "HIGH" if score >= .8 else "MEDIUM" if score >= .5 else "LOW",
+                "domain_scores": {domain: float(row[f"{domain}_risk"]) for domain in IF_GROUPS}}
 
-        self.rvfl_orchestrator = (
-            RedRVFLOrchestrator(
-
-                input_features=
-                    self.rvfl_metadata[
-                        "input_features"
-                    ],
-
-                hidden_size=
-                    self.rvfl_metadata[
-                        "hidden_size"
-                    ],
-
-                num_layers=
-                    self.rvfl_metadata[
-                        "num_layers"
-                    ]
-
-            )
-        )
-        # Load feature columns
-        if not os.path.exists(columns_path):
-            raise FileNotFoundError(f"Persisted feature columns not found at {columns_path}")
-        with open(columns_path, "r") as f:
-            self.feature_columns = json.load(f)
-        xgb_model_path = os.path.join(
-            self.models_dir,
-            "scenario_xgb.pkl"
-        )
-
-        xgb_features_path = os.path.join(
-            self.models_dir,
-            "scenario_xgb_features.json"
-        )
-        if not os.path.exists(xgb_model_path):
-            raise FileNotFoundError(
-                f"Scenario XGB model not found at {xgb_model_path}"
-            )
-
-        self.scenario_model = joblib.load(
-            xgb_model_path
-        )
-
-        if not os.path.exists(
-            xgb_features_path
-        ):
-            raise FileNotFoundError(
-                f"Scenario feature list not found at {xgb_features_path}"
-            )
-
-        with open(
-            xgb_features_path,
-            "r"
-        ) as f:
-
-            self.scenario_features = json.load(
-                f
-            )
-
-    def predict_current_risk(
-        self,
-        payload
-    ):
-
-        if "features" not in payload:
-            raise ValueError(
-                "Missing 'features'"
-            )
-
+    def predict_scenario(self, payload):
         features = payload["features"]
-
-        required_features = (
-
-            set(LOGON_FEATURES)
-
-            |
-
-            set(FILE_FEATURES)
-
-            |
-
-            set(DEVICE_FEATURES)
-
-            |
-
-            set(HTTP_FEATURES)
-
-        )
-
-        missing = (
-
-            required_features
-
-            -
-
-            set(features.keys())
-
-        )
-
+        missing = set(self.scenario_features) - set(features)
         if missing:
-            raise ValueError(
-                f"Missing features: {sorted(list(missing))}"
-            )
+            raise ValueError(f"Missing scenario features: {sorted(missing)}")
+        frame = pd.DataFrame([{name: features[name] for name in self.scenario_features}])
+        return self._scenario_result(self._probabilities(frame)[0])
 
-        logon_cols = [
-            c
-            for c in LOGON_FEATURES
-            if c in features
-        ]
+    def predict_behavioral_risk(self, payload):
+        """Compatibility API for caller-enriched observations; no SHAP without raw features."""
+        days = payload["daily_sequence"]
+        length = self.config["sequence_length"]
+        if len(days) <= length:
+            raise ValueError(f"daily_sequence must contain at least {length + 1} observations.")
+        dates = pd.to_datetime([day["date"] for day in days], utc=True)
+        if dates.hasnans or dates.duplicated().any():
+            raise ValueError("Daily observations require unique valid dates.")
+        days = [days[i] for i in np.argsort(dates)]
+        fused = np.asarray([self.if_weight * float(day["overall_risk"]) + self.xgb_weight * max(
+            float(day.get(f"rf_{name}_prob", 0)) for name in self.scenario_names[1:])
+            for day in days], dtype=np.float32)
+        if not np.isfinite(fused).all():
+            raise ValueError("Nonfinite fused risk.")
+        X_raw = np.asarray([fused[i-length:i, None] for i in range(length, len(days))], dtype=np.float32)
+        X = self.feature_scaler.transform(X_raw.reshape(-1, 1)).reshape(X_raw.shape)
+        y = self.target_scaler.transform(fused[length:, None]).ravel()
+        with torch.no_grad():
+            prediction = self.rvfl_orchestrator.predict(torch.tensor(X, dtype=torch.float32), self.ridge_models).ravel()
+        errors = np.square(y - prediction)
+        mean = float(errors.mean())
+        thresholds = self.config["legacy_mean_error_thresholds"]
+        level = "HIGH" if mean >= thresholds["high"] else "MEDIUM" if mean >= thresholds["medium"] else "LOW"
+        scenario = max(self.scenario_names[1:], key=lambda name: float(days[-1].get(f"rf_{name}_prob", 0)))
+        return {"payload_id": payload.get("payload_id"), "username": payload.get("username"),
+                "hostname": payload.get("hostname"), "rvfl_error": float(errors[-1]),
+                "behavioral_risk": level, "score_v2": float(errors.max()) * mean * float(np.sqrt(len(errors))),
+                "sequence_length_received": len(days), "sequence_length_expected": length,
+                "predicted_scenario": {"scenario": scenario, "confidence": float(days[-1].get(f"rf_{scenario}_prob", 0))},
+                "model_versions": {"pipeline": self.config["model_version"]},
+                "recommended_action": "Analyst review recommended." if level != "LOW" else "No action required.",
+                "explanations": {"available": False, "reason": "Raw features required for SHAP."}}
 
-        file_cols = [
-            c
-            for c in FILE_FEATURES
-            if c in features
-        ]
+    def _explain_dates(self, frame, probabilities, selected_indices):
+        X = frame.iloc[selected_indices][self.scenario_features].fillna(0)
+        with self._lock:
+            if self._explainer is None:
+                self._explainer = shap.TreeExplainer(
+                    self.scenario_model, model_output="raw", feature_perturbation="tree_path_dependent")
+            values = normalize_shap_values(
+                self._explainer.shap_values(X), len(X), len(self.scenario_features), len(self.scenario_names))
+            base = np.asarray(self._explainer.expected_value)
+            margins = self.scenario_model.get_booster().predict(xgb.DMatrix(X), output_margin=True)
+        residual = check_shap_additivity(values, base, margins)
+        days = []
+        for local_index, index in enumerate(selected_indices):
+            probability = probabilities[index]
+            threat = int(np.argmax(probability[1:]) + 1)
+            winner = int(np.argmax(probability))
+            classes = []
+            prior_median = frame.iloc[max(0, index - 7):index][self.scenario_features].median()
+            for class_index in dict.fromkeys([threat, winner]):
+                items = [{
+                    "feature": name, "observed_value": float(X.iloc[local_index][name]),
+                    "normal_training_median": self.config["normal_training_medians"][name],
+                    "preceding_7_observations_median": (
+                        float(prior_median[name]) if len(prior_median) and np.isfinite(prior_median[name]) else None),
+                    "shap_raw_margin": float(values[local_index, feature_index, class_index]),
+                } for feature_index, name in enumerate(self.scenario_features)]
+                items.sort(key=lambda item: abs(item["shap_raw_margin"]), reverse=True)
+                classes.append({
+                    "scenario": self.scenario_names[class_index],
+                    "role": "selected_threat_for_risk_fusion" if class_index == threat else "predicted_class",
+                    "probability": float(probability[class_index]),
+                    "base_raw_margin": float(base[class_index]),
+                    "sum_shap_raw_margin": float(values[local_index, :, class_index].sum()),
+                    "output_raw_margin": float(margins[local_index, class_index]),
+                    "positive_features": [item for item in items if item["shap_raw_margin"] > 0][:5],
+                    "negative_features": [item for item in items if item["shap_raw_margin"] < 0][:5],
+                    "all_features": items,
+                })
+            days.append({"date": frame.iloc[index]["date"].isoformat(),
+                         "predicted_scenario": self.scenario_names[winner],
+                         "xgboost_explanations": classes})
+        return {"available": True, "explained_model": "XGBoost scenario raw margins",
+                "explains_final_score_v2": False, "units": "raw margin, not probability points",
+                "background": "tree-path training statistics, including SMOTE samples",
+                "max_additivity_residual": residual, "key_dates": days}
 
-        device_cols = [
-            c
-            for c in DEVICE_FEATURES
-            if c in features
-        ]
-
-        http_cols = [
-            c
-            for c in HTTP_FEATURES
-            if c in features
-        ]
-
-        logon_X = np.array(
-            [[features[c] for c in logon_cols]],
-            dtype=np.float32
-        )
-
-        file_X = np.array(
-            [[features[c] for c in file_cols]],
-            dtype=np.float32
-        )
-
-        device_X = np.array(
-            [[features[c] for c in device_cols]],
-            dtype=np.float32
-        )
-
-        http_X = np.array(
-            [[features[c] for c in http_cols]],
-            dtype=np.float32
-        )
-
-        scores = self.domain_if.score(
-            logon_X,
-            file_X,
-            device_X,
-            http_X
-        )
-
-        logon_score = float(
-            scores["logon"][0]
-        )
-
-        file_score = float(
-            scores["file"][0]
-        )
-
-        device_score = float(
-            scores["device"][0]
-        )
-
-        http_score = float(
-            scores["http"][0]
-        )
-
-        overall_score = (
-            logon_score +
-            file_score +
-            device_score +
-            http_score
-        ) / 4.0
-
-        # CHANGED: Rescale overall_score so 0.7287 (observed max) maps to ~1.0
-        # to align the actual model outputs with the 0.80/0.50 threshold levels defined in the README.
-        overall_score = min(overall_score / 0.7287, 1.0)
-
-        if overall_score >= 0.80:
-            risk_level = "HIGH"
-        elif overall_score >= 0.50:
-            risk_level = "MEDIUM"
+    def predict_user_risk(self, payload, explain=True):
+        frame = self._enrich(payload["daily_sequence"])
+        probabilities = self._probabilities(frame)
+        scenario_risk = probabilities[:, 1:].max(axis=1)
+        fused = (self.if_weight * frame.overall_risk.to_numpy() + self.xgb_weight * scenario_risk)
+        length = self.config["sequence_length"]
+        count = len(frame) - length
+        scenario = self._scenario_result(probabilities[-1])
+        latest = frame.iloc[-1]
+        current = {"overall_score": float(latest.overall_risk),
+                   "raw_overall_risk": float(latest.raw_overall_risk),
+                   "domain_scores": {domain: float(latest[f"{domain}_risk"]) for domain in IF_GROUPS}}
+        errors = np.array([], dtype=float)
+        daily_errors = []
+        score_v2 = None
+        components = None
+        if count > 0:
+            # Match create_sequences(): float32 before applying training-fitted scalers.
+            X_raw = np.asarray([fused[i-length:i, None] for i in range(length, len(frame))], dtype=np.float32)
+            y_raw = np.asarray(fused[length:, None], dtype=np.float32)
+            X = self.feature_scaler.transform(X_raw.reshape(-1, 1)).reshape(X_raw.shape)
+            y = self.target_scaler.transform(y_raw).ravel()
+            with torch.no_grad():
+                predictions = self.rvfl_orchestrator.predict(torch.tensor(X, dtype=torch.float32), self.ridge_models).ravel()
+            errors = np.square(y - predictions)
+            if not np.isfinite(errors).all():
+                raise ValueError("RedRVFL produced nonfinite errors.")
+            observed = self.target_scaler.inverse_transform(y.reshape(-1, 1)).ravel()
+            predicted = self.target_scaler.inverse_transform(predictions.reshape(-1, 1)).ravel()
+            maximum, mean = float(errors.max()), float(errors.mean())
+            score_v2 = maximum * mean * float(np.sqrt(count))
+            components = {"max_error": maximum, "mean_error": mean, "sequence_count": count,
+                          "history_multiplier": float(np.sqrt(count)), "score_v2": score_v2,
+                          "formula": self.config["score_formula"], "units": self.config["error_units"]}
+            for i, error in enumerate(errors):
+                daily_errors.append({"date": frame.iloc[i + length]["date"].isoformat(),
+                    "error": float(error), "observed_risk_scaled": float(y[i]),
+                    "predicted_risk_scaled": float(predictions[i]),
+                    "observed_fused_risk": float(observed[i]), "predicted_fused_risk": float(predicted[i])})
+            # Explain highest-error targets, not arbitrary dates or largest SHAP values.
+            selected = sorted(range(count), key=lambda i: (-float(errors[i]), i))[:3]
+            selected_indices = [i + length for i in selected]
+            thresholds = self.config["legacy_mean_error_thresholds"]
+            level = "HIGH" if mean >= thresholds["high"] else "MEDIUM" if mean >= thresholds["medium"] else "LOW"
+            display = min(score_v2 * self.config["display_score"]["multiplier"], self.config["display_score"]["cap"])
+            mode = "full_pipeline"
         else:
-            risk_level = "LOW"
-
-        return {
-
-            "detector":
-                "isolation_forest",
-
-            "overall_score":
-                round(
-                    overall_score,
-                    6
-                ),
-
-            "risk_level":
-                risk_level,
-
-            "domain_scores": {
-
-                "logon":
-                    round(
-                        logon_score,
-                        6
-                    ),
-
-                "file":
-                    round(
-                        file_score,
-                        6
-                    ),
-
-                "device":
-                    round(
-                        device_score,
-                        6
-                    ),
-
-                "http":
-                    round(
-                        http_score,
-                        6
-                    )
-
-            }
-
-        }
-    def predict_behavioral_risk(
-            self,
-            payload
-    ):
-
-        required_keys = [
-
-            "payload_id",
-            "username",
-            "hostname",
-            "daily_sequence"
-
-        ]
-
-        for key in required_keys:
-
-            if key not in payload:
-
-                raise ValueError(
-                    f"Missing required payload key: '{key}'"
-                )
-
-        daily_sequence = payload[
-            "daily_sequence"
-        ]
-
-        seq_len = self.rvfl_metadata[
-            "sequence_length"
-        ]
-
-        if len(
-            daily_sequence
-        ) < seq_len + 1:
-
-            raise ValueError(
-
-                f"daily_sequence must contain at least "
-                f"{seq_len + 1} days of history. "
-
-                f"Provided: {len(daily_sequence)}"
-
-            )
-
-        target_sequence = (
-
-            daily_sequence[
-                -(seq_len + 1):
-            ]
-
-        )
-
-        rvfl_values = []
-
-        for day in target_sequence:
-
-            overall_risk = float(
-                day["overall_risk"]
-            )
-
-            # CHANGED: Use all 5 threat scenario probs (6-class model, excluding 'normal').
-            # Old code only had rf_s1_prob, rf_s2_prob, rf_s3_prob (4-class).
-            scenario_risk = max(
-                float(day.get("rf_email_exfil_prob", 0.0)),
-                float(day.get("rf_sabotage_prob", 0.0)),
-                float(day.get("rf_usb_exfil_prob", 0.0)),
-                float(day.get("rf_flight_risk_prob", 0.0)),
-                float(day.get("rf_cloud_exfil_prob", 0.0)),
-            )
-
-            rvfl_risk = (
-
-                self.if_weight * overall_risk
-
-                +
-
-                self.xgb_weight * scenario_risk
-
-            )
-
-            rvfl_values.append(
-                [rvfl_risk]
-            )
-
-        features_array = np.array(
-
-            rvfl_values,
-
-            dtype=np.float32
-
-        )
-
-        X_seq = features_array[
-            :seq_len
-        ]
-
-        y_actual = features_array[
-            seq_len:
-        ]
-
-        X_tensor = torch.tensor(
-
-            X_seq,
-
-            dtype=torch.float32
-
-        ).unsqueeze(0)
-
-        y_pred = (
-
-            self.rvfl_orchestrator
-            .predict(
-
-                X_tensor,
-
-                self.ridge_models
-
-            )
-
-        )
-
-        rvfl_error = float(
-
-            np.mean(
-
-                np.square(
-
-                    y_actual.reshape(-1)
-
-                    -
-
-                    np.asarray(
-                        y_pred
-                    ).reshape(-1)
-
-                )
-
-            )
-
-        )
-
-        if rvfl_error >= 0.05:
-
-            behavioral_risk = "HIGH"
-
-            recommended_action = (
-                "Escalate for analyst review."
-            )
-
-        elif rvfl_error >= 0.02:
-
-            behavioral_risk = "MEDIUM"
-
-            recommended_action = (
-                "Monitor user behavior closely."
-            )
-
-        else:
-
-            behavioral_risk = "LOW"
-
-            recommended_action = (
-                "No action required."
-            )
-
-        latest_day = target_sequence[-1]
-
-        # CHANGED: Use all 5 threat scenario keys from 6-class model.
-        all_threat_probs = [
-            ("email_exfil", float(latest_day.get("rf_email_exfil_prob", 0.0))),
-            ("sabotage",    float(latest_day.get("rf_sabotage_prob", 0.0))),
-            ("usb_exfil",   float(latest_day.get("rf_usb_exfil_prob", 0.0))),
-            ("flight_risk", float(latest_day.get("rf_flight_risk_prob", 0.0))),
-            ("cloud_exfil", float(latest_day.get("rf_cloud_exfil_prob", 0.0))),
-        ]
-        latest_scenario = max(all_threat_probs, key=lambda x: x[1])
-
-        return {
-
-            "payload_id":
-                payload["payload_id"],
-
-            "username":
-                payload["username"],
-
-            "hostname":
-                payload["hostname"],
-
-            "rvfl_error":
-                round(
-                    rvfl_error,
-                    6
-                ),
-
-            "behavioral_risk":
-                behavioral_risk,
-
-            "predicted_scenario": {
-
-                "scenario":
-                    latest_scenario[0],
-
-                "confidence":
-                    round(
-                        latest_scenario[1],
-                        6
-                    )
-
-            },
-
-            "sequence_length_received":
-                len(
-                    daily_sequence
-                ),
-
-            "sequence_length_expected":
-                seq_len,
-
-            "model_versions": {
-
-                "rvfl_model":
-                    "v1",
-
-                "scenario_model":
-                    "external"
-
-            },
-
-            "recommended_action":
-                recommended_action
-
-        }
-    def predict_scenario(
-            self,
-            payload
-    ):
-
-        if "features" not in payload:
-
-            raise ValueError(
-                "Missing 'features'"
-            )
-
-        features = payload[
-            "features"
-        ]
-
-        missing = (
-
-            set(
-                self.scenario_features
-            )
-
-            -
-
-            set(
-                features.keys()
-            )
-
-        )
-
-        if missing:
-
-            raise ValueError(
-
-                f"Missing scenario features: "
-                f"{sorted(list(missing))}"
-
-            )
-
-        X = np.array([
-
-            [
-
-                features[col]
-
-                for col in
-                self.scenario_features
-
-            ]
-
-        ])
-
-        probabilities = (
-
-            self.scenario_model
-            .predict_proba(X)[0]
-
-        )
-
-        class_labels = (
-            self.scenario_model.classes_
-        )
-
-        # CHANGED: Expanded class_map from 4 to 6 classes to match the new
-        # 6-class XGBoost model trained in latest_data/latest_xgb_classifier.py.
-        # Old map only had {0,1,2,3}; new model outputs {0,1,2,3,4,5}.
-        class_map = {
-            0: "normal",
-            1: "email_exfil",
-            2: "sabotage",
-            3: "usb_exfil",
-            4: "flight_risk",
-            5: "cloud_exfil",
-        }
-
-        prob_dict = {}
-
-        for idx, cls in enumerate(
-            class_labels
-        ):
-
-            prob_dict[
-                f"rf_{class_map[cls]}_prob"
-            ] = float(
-                probabilities[idx]
-            )
-
-        predicted_class = (
-
-            class_labels[
-                np.argmax(
-                    probabilities
-                )
-            ]
-
-        )
-
-        return {
-
-            "scenario":
-
-                class_map[
-                    predicted_class
-                ],
-
-            "confidence":
-
-                float(
-                    np.max(
-                        probabilities
-                    )
-                ),
-
-            **prob_dict
-
-        }
-
-    # CHANGED: Added predict_user_risk to support end-to-end user inference from raw sequence of daily features,
-    # computing daily risk metrics and rolling features (delta, mean, std) on-the-fly to match training.
-    # The output format is structured to meet the assertions of test_inference.py, providing risk_score,
-    # risk_level, detectors, and recommended_action.
-    def predict_user_risk(
-        self,
-        payload: dict
-    ) -> dict:
-        if "daily_sequence" not in payload:
-            raise ValueError("Missing 'daily_sequence'")
-        
-        enriched_sequence = []
-        overall_risk_history = []
-        
-        for idx, day in enumerate(payload["daily_sequence"]):
-            if "features" not in day:
-                raise ValueError("Each day in daily_sequence must have 'features'")
-            
-            # Run Isolation Forest to get overall score and domain scores
-            if_result = self.predict_current_risk({"features": day["features"]})
-            
-            o_val = if_result["overall_score"]
-            l_val = if_result["domain_scores"]["logon"]
-            f_val = if_result["domain_scores"]["file"]
-            d_val = if_result["domain_scores"]["device"]
-            h_val = if_result["domain_scores"]["http"]
-            
-            overall_risk_history.append(o_val)
-            
-            # Compute rolling features on-the-fly
-            if idx == 0:
-                delta = 0.0
-            else:
-                delta = o_val - overall_risk_history[idx - 1]
-                
-            window = overall_risk_history[max(0, idx - 6):idx + 1]
-            rolling_mean = float(np.mean(window))
-            
-            if len(window) < 2:
-                rolling_std = 0.0
-            else:
-                rolling_std = float(np.std(window, ddof=1))
-                if np.isnan(rolling_std):
-                    rolling_std = 0.0
-            
-            # Construct feature dictionary including raw and enriched features for XGBoost
-            xgb_features = day["features"].copy()
-            xgb_features["logon_risk"] = l_val
-            xgb_features["file_risk"] = f_val
-            xgb_features["device_risk"] = d_val
-            xgb_features["http_risk"] = h_val
-            xgb_features["overall_risk"] = o_val
-            xgb_features["daily_risk_delta"] = delta
-            xgb_features["daily_risk_rolling_mean_7d"] = rolling_mean
-            xgb_features["daily_risk_rolling_std_7d"] = rolling_std
-            
-            # Run XGBoost to get scenario probabilities
-            xgb_result = self.predict_scenario({"features": xgb_features})
-            
-            enriched_sequence.append({
-                "date": day.get("date"),
-                "overall_risk": o_val,
-                # CHANGED: Store all 5 threat probs using 6-class names
-                "rf_email_exfil_prob": xgb_result.get("rf_email_exfil_prob", 0.0),
-                "rf_sabotage_prob":    xgb_result.get("rf_sabotage_prob", 0.0),
-                "rf_usb_exfil_prob":   xgb_result.get("rf_usb_exfil_prob", 0.0),
-                "rf_flight_risk_prob": xgb_result.get("rf_flight_risk_prob", 0.0),
-                "rf_cloud_exfil_prob": xgb_result.get("rf_cloud_exfil_prob", 0.0),
-            })
-            
-        behavioral_payload = {
-            "payload_id": payload["payload_id"],
-            "username": payload["username"],
-            "hostname": payload["hostname"],
-            "daily_sequence": enriched_sequence
-        }
-        
-        # Run RedRVFL Behavioral Model
-        rvfl_res = self.predict_behavioral_risk(behavioral_payload)
-        
-        # Construct the final result with all required keys
-        return {
-            "payload_id": payload["payload_id"],
-            "username": payload["username"],
-            "hostname": payload["hostname"],
-            "risk_score": min(rvfl_res["rvfl_error"] * 1000.0, 100.0),
-            "risk_level": rvfl_res["behavioral_risk"],
-            "recommended_action": rvfl_res["recommended_action"],
-            "detectors": {
-                "isolation_forest": if_result,
-                "xgboost": xgb_result,
-                "red_rvfl": rvfl_res
-            },
-            "sequence_length_received": len(payload["daily_sequence"]),
-            "sequence_length_expected": self.rvfl_metadata["sequence_length"],
-            "model_versions": {
-                "rvfl_model": "v1",
-                "scenario_model": "external"
-            }
-        }
-
-_engine = None    
-def get_engine():
-    global _engine
-    if _engine is None:
-        _engine = InferenceEngine()
-    return _engine
-
-def predict_current_risk(
-    payload: dict
-) -> dict:
-
-    return (
-        get_engine()
-        .predict_current_risk(
-            payload
-        )
-    )
-
-
-def predict_behavioral_risk(
-    payload: dict
-) -> dict:
-
-    return (
-        get_engine()
-        .predict_behavioral_risk(
-            payload
-        )
-    )
-
-def predict_scenario(
-    payload: dict
-) -> dict:
-
-    return (
-        get_engine()
-        .predict_scenario(
-            payload
-        )
-    )
-
-
-# CHANGED: Added module level wrapper for predict_user_risk
-def predict_user_risk(
-    payload: dict
-) -> dict:
-
-    return (
-        get_engine()
-        .predict_user_risk(
-            payload
-        )
-    )
+            selected_indices = [len(frame) - 1]
+            level = "HIGH" if current["overall_score"] >= .8 else "MEDIUM" if current["overall_score"] >= .5 else "LOW"
+            display = current["overall_score"] * 100
+            mode = "if_xgb_warmup"
+        evidence = {"available": False, "reason": "Explanations disabled."}
+        if explain:
+            try:
+                evidence = self._explain_dates(frame, probabilities, selected_indices)
+                errors_by_date = {row["date"]: row for row in daily_errors}
+                for day in evidence["key_dates"]:
+                    day.update(errors_by_date.get(day["date"], {}))
+            except Exception as error:
+                # Explanations must never change a valid detection score.
+                evidence = {"available": False, "reason": f"{type(error).__name__}: {error}"}
+        behavioral = {"rvfl_error": float(errors[-1]) if count > 0 else None,
+                      "mean_error": float(errors.mean()) if count > 0 else None,
+                      "behavioral_risk": level, "daily_errors": daily_errors,
+                      "score_components": components}
+        action = "Escalate for analyst review." if level == "HIGH" else "Monitor user behavior closely." if level == "MEDIUM" else "No action required."
+        return {"payload_id": payload.get("payload_id"), "username": payload.get("username"),
+                "hostname": payload.get("hostname"), "risk_score": float(display),
+                "risk_level": level, "recommended_action": action,
+                "score_v2": score_v2, "score_components": components, "mode": mode,
+                "display_score_contract": self.config["display_score"] if count > 0 else {"description": "Warmup IF risk times 100; score_v2 unavailable."},
+                "history": {"observations": len(frame), "sequence_count": max(count, 0),
+                            "first_date": frame.iloc[0]["date"].isoformat(),
+                            "last_date": latest["date"].isoformat(),
+                            "scope": "supplied observations only; not necessarily consecutive calendar days"},
+                "explanations": evidence,
+                "detectors": {"isolation_forest": current, "xgboost": scenario, "red_rvfl": behavioral},
+                "model_versions": {"pipeline": self.config["model_version"]},
+                "sequence_length_received": len(frame), "sequence_length_expected": length}
+
+
+_engine_lock = threading.Lock()
+
+
+@lru_cache(maxsize=2)
+def _cached_engine(directory, manifest_mtime):
+    return InferenceEngine(directory)
+
+
+def get_engine(models_dir=None):
+    directory = Path(models_dir or Path(__file__).resolve().parents[3] / "artifacts/shap_v1").resolve()
+    with _engine_lock:
+        return _cached_engine(str(directory), (directory / "pipeline_config.json").stat().st_mtime_ns)
+
+
+def predict_behavioral_risk(payload):
+    return get_engine().predict_behavioral_risk(payload)
+
+
+def predict_current_risk(payload):
+    return get_engine().predict_current_risk(payload)
+
+
+def predict_scenario(payload):
+    return get_engine().predict_scenario(payload)
+
+
+def predict_user_risk(payload):
+    return get_engine().predict_user_risk(payload)
 

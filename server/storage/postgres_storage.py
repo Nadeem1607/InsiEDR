@@ -733,15 +733,29 @@ class PostgresStorage(BaseStorage):
                     if not where:
                         return []
                     where_sql = " AND ".join(where)
+                    day_expression = ("substr(feature_timestamp, 1, 10)" if self._is_sqlite
+                                      else "(feature_timestamp AT TIME ZONE 'UTC')::date")
+                    joined_day_expression = ("substr(nf.feature_timestamp, 1, 10)" if self._is_sqlite
+                                             else "(nf.feature_timestamp AT TIME ZONE 'UTC')::date")
                     cursor.execute(
                         f"""
-                        SELECT feature_timestamp, feature_name, feature_value_numeric, feature_value_text, feature_value_json
-                        FROM normalized_features
-                        WHERE {where_sql}
-                        ORDER BY feature_timestamp DESC, id DESC
-                        LIMIT %s
+                        WITH snapshots AS (
+                            SELECT payload_id, {day_expression} AS day, MAX(feature_timestamp) AS latest
+                            FROM normalized_features WHERE {where_sql}
+                            GROUP BY payload_id, {day_expression}
+                        ), ranked AS (
+                            SELECT *, ROW_NUMBER() OVER (PARTITION BY day ORDER BY latest DESC, payload_id DESC) AS rn
+                            FROM snapshots
+                        ), chosen AS (
+                            SELECT * FROM ranked WHERE rn = 1 ORDER BY day DESC LIMIT %s
+                        )
+                        SELECT chosen.day, nf.feature_name, nf.feature_value_numeric,
+                               nf.feature_value_text, nf.feature_value_json
+                        FROM chosen JOIN normalized_features nf ON nf.payload_id = chosen.payload_id
+                            AND {joined_day_expression} = chosen.day
+                        ORDER BY chosen.day DESC, nf.id DESC
                         """,
-                        tuple(params + [limit * 128]),
+                        tuple(params + [max(1, min(int(limit), 1000))]),
                     )
                     grouped: dict[str, dict[str, Any]] = {}
                     for timestamp, name, numeric, text, json_value in cursor.fetchall():
@@ -749,6 +763,8 @@ class PostgresStorage(BaseStorage):
                         if not day:
                             continue
                         grouped.setdefault(day, {})
+                        if name in grouped[day]:
+                            continue
                         if numeric is not None:
                             grouped[day][name] = numeric
                         elif text is not None:
@@ -1040,23 +1056,31 @@ class PostgresStorage(BaseStorage):
                 try:
                     cursor.execute(
                         """
+                        WITH latest AS (
+                            SELECT *, ROW_NUMBER() OVER (PARTITION BY detector_name
+                                ORDER BY created_at DESC, id DESC) AS rn
+                            FROM model_outputs WHERE username = %s AND detector_name IN
+                                ('advanced_pipeline', 'isolation_forest', 'redrvfl_behavioral')
+                        )
                         SELECT mo.detector_name, mo.score, mo.confidence, mo.is_anomaly, 
                                mo.feature_contributions_json, mo.reason_summary, mo.created_at
-                        FROM model_outputs mo
-                        WHERE mo.username = %s
-                        ORDER BY mo.created_at DESC
-                        LIMIT 2
+                        FROM latest mo WHERE mo.rn = 1
+                        ORDER BY mo.created_at DESC, mo.id DESC
                         """,
                         (username,)
                     )
                     
                     predictions = {
                         "short_term": None,
-                        "long_term": None
+                        "long_term": None,
+                        "advanced_pipeline": None,
                     }
                     
-                    for idx, row in enumerate(cursor.fetchall()):
-                        detector_type = "short_term" if idx == 0 else "long_term"
+                    for row in cursor.fetchall():
+                        detector_type = ("advanced_pipeline" if row[0] == "advanced_pipeline" else
+                                         "long_term" if row[0] == "redrvfl_behavioral" else "short_term")
+                        if predictions[detector_type] is not None:
+                            continue
                         contributions = row[4] if isinstance(row[4], dict) else (json.loads(row[4]) if row[4] else {})
                         
                         predictions[detector_type] = {
@@ -1068,6 +1092,22 @@ class PostgresStorage(BaseStorage):
                             "summary": row[5],
                             "created_at": row[6]
                         }
+                    pipeline = predictions["advanced_pipeline"]
+                    if pipeline is not None:
+                        contributions = pipeline["contributions"]
+                        predictions.update({
+                            "short_term": pipeline,
+                            "behavioral_risk": pipeline["score"],
+                            "score_v2": contributions.get("score_v2"),
+                            "score_components": contributions.get("score_components"),
+                            "explanations": contributions.get("explanations"),
+                            "feature_contributions": contributions.get("domain_scores", {}),
+                            "predicted_scenario": {
+                                "scenario": contributions.get("predicted_scenario"),
+                                "confidence": contributions.get("scenario_confidence", 0),
+                            },
+                            "mode": contributions.get("mode"),
+                        })
                     
                     return predictions if predictions["short_term"] or predictions["long_term"] else None
                 except Exception:

@@ -1,4 +1,5 @@
 import os
+import argparse
 import sys
 import json
 import time
@@ -18,6 +19,8 @@ final_model_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(final_model_dir)
 
 from src.red_revfl_orchestrator import RedRVFLOrchestrator
+from src.score_explanations import export_score_explanations
+from src.model_bundle import export_model_bundle
 from src.run.feature_to_sequence import create_sequences
 from src.server.anomaly.domain_models import DomainIsolationForest
 from src.server.anomaly.rolling_features import build_daily_risk_dataframe
@@ -58,9 +61,9 @@ def extract_features_from_raw_logs(raw_logs_dir):
     return features_df
 
 
-def train_domain_isolation_forests(feature_df, output_dir):
+def train_domain_isolation_forests(feature_df, output_dir, train_users):
     """
-    Train 4 domain Isolation Forests (Logon, File, Device, HTTP) and score records.
+    Fit 4 domain Isolation Forests on training users only, then score all records.
     """
     logon_cols = existing_columns(feature_df, LOGON_FEATURES)
     file_cols = existing_columns(feature_df, FILE_FEATURES)
@@ -78,9 +81,15 @@ def train_domain_isolation_forests(feature_df, output_dir):
     device_X = feature_df[device_cols].fillna(0).values
     http_X = feature_df[http_cols].fillna(0).values
 
+    fit_mask = feature_df["user"].isin(train_users).to_numpy()
+    if not fit_mask.any():
+        raise ValueError("No feature records found for training users.")
+    print(f"  IF fit boundary: {int(fit_mask.sum())} training-user records; "
+          f"{int((~fit_mask).sum())} non-training records excluded from fitting.")
+
     print("\n  Training Domain Isolation Forests (contamination=0.05)...")
     domain_if = DomainIsolationForest(contamination=0.05)
-    domain_if.fit(logon_X, file_X, device_X, http_X)
+    domain_if.fit(logon_X[fit_mask], file_X[fit_mask], device_X[fit_mask], http_X[fit_mask])
 
     # Save trained IF model
     model_path = os.path.join(output_dir, "domain_isolation_forest.pkl")
@@ -186,14 +195,23 @@ def save_cm_csv(cm, row_labels, col_labels, file_path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Run the pipeline in an isolated output directory.")
+    parser.add_argument("--run-dir", default=final_model_dir, help="Directory for this run's artifacts.")
+    parser.add_argument("--input-logs", default=os.path.join(final_model_dir, "INPUT_LOGS"), help="Original dataset directory containing OUTPUT_LABELS.")
+    parser.add_argument("--skip-explanations", action="store_true", help="Run scoring without explanation exports.")
+    parser.add_argument("--explain-top-users", type=int, default=20, help="Number of top test users to explain.")
+    parser.add_argument("--key-dates", type=int, default=3, help="Highest-error dates to explain per user.")
+    args = parser.parse_args()
+    if args.explain_top_users < 1 or args.key_dates < 1:
+        parser.error("Explanation limits must be positive.")
     print("=" * 80)
     print("      INSIEDR UNIFIED PIPELINE (IF + SHAP + XGBOOST + REDRVFL)")
     print("=" * 80)
     
     new_model_dir = os.path.dirname(os.path.abspath(__file__))
-    output_dir = os.path.join(new_model_dir, "output")
+    output_dir = os.path.join(os.path.abspath(args.run_dir), "output")
     latest_data_dir = os.path.join(new_model_dir, "latest_data")
-    cm_base_dir = os.path.join(new_model_dir, "confusion_matrices")
+    cm_base_dir = os.path.join(os.path.abspath(args.run_dir), "confusion_matrices")
     
     # Subdirectories for model-wise confusion matrices
     cm_if_dir = os.path.join(cm_base_dir, "isolation_forest")
@@ -205,8 +223,8 @@ def main():
         os.makedirs(d, exist_ok=True)
     
     raw_features_path = os.path.join(latest_data_dir, "raw_features.csv")
-    enriched_features_path = os.path.join(latest_data_dir, "if_enriched_features.csv")
-    raw_logs_dir = r"D:\AISH\final_model_clone\InsiEDR\final_model\INPUT_LOGS"
+    enriched_features_path = os.path.join(output_dir, "if_enriched_features.csv")
+    raw_logs_dir = os.path.abspath(args.input_logs)
     labels_csv_path = os.path.join(raw_logs_dir, "OUTPUT_LABELS", "insider_labels.csv")
     
     # -------------------------------------------------------------------------
@@ -244,13 +262,15 @@ def main():
 
     print(f"Loaded {len(feature_df)} records for {feature_df['user'].nunique()} users.")
 
-    # Train Isolation Forest models and obtain domain risk scores
-    feature_df, domain_if = train_domain_isolation_forests(feature_df, output_dir)
-    feature_df.to_csv(enriched_features_path, index=False)
-    print(f"Saved IF enriched features to '{enriched_features_path}'")
-
     print(f"\nLoading labels from '{labels_csv_path}'...")
     labels_df = pd.read_csv(labels_csv_path)
+    # Establish the held-out users before fitting any domain forest.
+    train_users, test_users = stratified_user_split(labels_df, test_size=0.2, random_state=42)
+
+    # Train Isolation Forest models and obtain domain risk scores
+    feature_df, domain_if = train_domain_isolation_forests(feature_df, output_dir, train_users)
+    feature_df.to_csv(enriched_features_path, index=False)
+    print(f"Saved IF enriched features to '{enriched_features_path}'")
 
     # -------------------------------------------------------------------------
     # STAGE 2: Stratified User Split & SHAP Domain Weighting
@@ -259,7 +279,6 @@ def main():
     print("STAGE 2: STRATIFIED USER SPLIT & SHAP DOMAIN WEIGHTING")
     print("=" * 80)
 
-    train_users, test_users = stratified_user_split(labels_df, test_size=0.2, random_state=42)
     print(f"User split: {len(train_users)} Train Users, {len(test_users)} Test Users")
     
     with open(os.path.join(output_dir, "trained_users.txt"), "w") as f:
@@ -506,13 +525,19 @@ def main():
     y_pred = model.predict(X_all_tensor, ridge_models)
     
     errors = np.square(y_all.ravel() - y_pred.ravel())
+    observed_fused_risk = target_scaler.inverse_transform(y_all.reshape(-1, 1)).ravel()
+    predicted_fused_risk = target_scaler.inverse_transform(y_pred.reshape(-1, 1)).ravel()
     
     daily_errors = []
-    for err, meta in zip(errors, metadata_all):
+    for index, (err, meta) in enumerate(zip(errors, metadata_all)):
         daily_errors.append({
             "user": meta["user"],
             "date": meta["target_date"],
-            "error": float(err)
+            "error": float(err),
+            "observed_risk_scaled": float(y_all.ravel()[index]),
+            "predicted_risk_scaled": float(y_pred.ravel()[index]),
+            "observed_fused_risk": float(observed_fused_risk[index]),
+            "predicted_fused_risk": float(predicted_fused_risk[index]),
         })
     daily_errors_df = pd.DataFrame(daily_errors)
     
@@ -531,6 +556,20 @@ def main():
     agg_df = agg_df.sort_values("score_v2", ascending=False).reset_index(drop=True)
     agg_df.to_csv(os.path.join(output_dir, "top_users_shap.csv"), index=False)
     print("Saved ranked top users to 'output/top_users_shap.csv'")
+
+    export_model_bundle(
+        output_dir, os.path.join(os.path.abspath(args.run_dir), "artifacts", "shap_v1"),
+        feature_df, labels_df, train_users, xgb_feature_cols,
+        max_raw_train_score, shap_weights,
+    )
+
+    if not args.skip_explanations:
+        print("\nGENERATING FINAL-SCORE EXPLANATIONS AND LOCAL XGBOOST SHAP EVIDENCE")
+        export_score_explanations(
+            output_dir, daily_errors_df, agg_df, enriched_df, xgb_multi,
+            xgb_feature_cols, train_users, test_users, scenario_names, shap_weights,
+            top_users=args.explain_top_users, key_dates=args.key_dates,
+        )
     
     # -------------------------------------------------------------------------
     # STAGE 5: Top-K Review Queue & Final Confusion Matrices

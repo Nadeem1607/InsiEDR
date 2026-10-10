@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+from importlib.metadata import version
 import json
 import sys
 from pathlib import Path
@@ -13,11 +14,12 @@ from server.config import config
 REQUIRED_MODEL_ARTIFACTS = (
     "domain_isolation_forest.pkl",
     "feature_scaler.pkl",
-    "ridge_models.pkl",       # G-model: rvfl_ridge_models.pkl renamed/symlinked
-    "rvfl_model.pkl",         # G-model: frozen RandomLSTM weights
-    "rvfl_metadata.json",
+    "target_scaler.pkl",
+    "rvfl_ridge_models.pkl",
+    "rvfl_model.pkl",
+    "pipeline_config.json",
     "feature_columns_IF.json",
-    "scenario_xgb.pkl",
+    "xgb_model.pkl",
     "scenario_xgb_features.json",
 )
 
@@ -27,6 +29,8 @@ REQUIRED_MODEL_DEPENDENCIES = (
     "sklearn",
     "torch",
     "xgboost",
+    "pandas",
+    "shap",
 )
 
 FEATURE_ALIASES = {
@@ -78,24 +82,37 @@ class ModelBridge:
         missing_dependencies = [
             name for name in REQUIRED_MODEL_DEPENDENCIES if importlib.util.find_spec(name) is None
         ]
+        bundle_errors = []
+        model_version = None
+        if not missing:
+            try:
+                manifest = json.loads((self.models_dir / "pipeline_config.json").read_text(encoding="utf-8"))
+                model_version = manifest.get("model_version")
+                if manifest.get("schema_version") != 1:
+                    bundle_errors.append("Unsupported bundle schema")
+                for name, expected in manifest["versions"].items():
+                    if version(name) != expected:
+                        bundle_errors.append(f"Requires {name}=={expected}")
+            except Exception as error:
+                bundle_errors.append(f"Invalid bundle: {error}")
         return {
             "enabled": config.enable_model_pipeline,
             "inference_dir": str(self.inference_dir),
             "models_dir": str(self.models_dir),
-            "ready": config.enable_model_pipeline and not missing and not missing_dependencies,
+            "ready": config.enable_model_pipeline and not missing and not missing_dependencies and not bundle_errors,
             "missing_artifacts": missing,
             "missing_dependencies": missing_dependencies,
+            "bundle_errors": bundle_errors,
+            "model_version": model_version,
         }
 
     def feature_columns(self) -> list[str]:
         if self._feature_columns is None:
             if_path = self.models_dir / "feature_columns_IF.json"
-            xgb_path = self.models_dir / "scenario_xgb_features.json"
             features = set()
             if if_path.exists():
                 features.update(json.loads(if_path.read_text(encoding="utf-8")))
-            if xgb_path.exists():
-                features.update(json.loads(xgb_path.read_text(encoding="utf-8")))
+            # Model-derived fields are computed by inference, not zero-filled telemetry.
             self._feature_columns = sorted(list(features))
         return self._feature_columns
 
@@ -294,7 +311,13 @@ class ModelBridge:
         for detector in detectors:
             # storage is passed through so AdvancedPipelineDetector can query
             # the 7-day rvfl_risk history needed for RedRVFL sequence scoring.
-            res = detector.detect(payload_id, agent_id, username, ordered_features, user_baseline, storage=storage)
+            if isinstance(detector, AdvancedPipelineDetector):
+                res = detector.detect(payload_id, agent_id, username, ordered_features, user_baseline,
+                                      storage=storage, hostname=payload.get("hostname"),
+                                      collected_at=payload.get("collected_at"))
+                res["feature_contributions"]["missing_features"] = missing
+            else:
+                res = detector.detect(payload_id, agent_id, username, ordered_features, user_baseline, storage=storage)
             detector_results.append(res)
             
             # Persist each detector's output
@@ -303,7 +326,7 @@ class ModelBridge:
                 "agent_id": agent_id,
                 "username": username,
                 "detector_name": res["detector_name"],
-                "model_version": "v2",
+                "model_version": res["feature_contributions"].get("model_version", "v2"),
                 "score": res["score"],
                 "confidence": res["confidence"],
                 "is_anomaly": res["is_anomaly"],

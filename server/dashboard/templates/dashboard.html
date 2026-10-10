@@ -510,7 +510,7 @@
               <div id="drillPredictions"></div>
             </div>
             <div>
-              <div class="card-title">Feature Contributions</div>
+              <div class="card-title">Isolation Forest Domain Scores</div>
               <div class="chart-wrap">
                 <canvas id="featureChart"></canvas>
               </div>
@@ -581,6 +581,7 @@
       let radarChart = null;
       let timelineChart = null;
       let featureChart = null;
+      let drillRequestSequence = 0;
       let severityChart = null;
       let selectedDrillUser = null;
       let extraTimelineEvents = [];
@@ -1079,6 +1080,8 @@
       /* ============================== DRILL-DOWN ============================== */
       async function drillDown(username) {
         if (!username) return;
+        const changingUser = username !== selectedDrillUser;
+        const requestId = ++drillRequestSequence;
         selectedDrillUser = username;
         // Highlight row
         document.querySelectorAll('#userTableBody tr').forEach(tr => {
@@ -1088,13 +1091,17 @@
         const panel = document.getElementById('drillDown');
         panel.classList.add('visible');
         document.getElementById('drillUser').textContent = username;
-        document.getElementById('drillPredictions').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+        if (changingUser) document.getElementById('drillPredictions').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
 
         try {
           const [analysis, predictions] = await Promise.all([
             api(`/api/user-risk-scores/${encodeURIComponent(username)}?limit=10`),
             api(`/api/user-predictions/${encodeURIComponent(username)}`)
           ]);
+          if (requestId !== drillRequestSequence || selectedDrillUser !== username) return;
+          const detailState = new Map(
+            [...document.querySelectorAll('#drillPredictions details[data-shap-key]')]
+            .map(element => [element.dataset.shapKey, element.open]));
 
           const riskScores = analysis.risk_scores || [];
           const pred = predictions.predictions;
@@ -1106,7 +1113,7 @@
             const score = parseFloat(latest.risk_score || 0);
             html += `
               <div class="drill-stat">
-                <span class="drill-stat-label">Current Risk Score</span>
+                <span class="drill-stat-label">Combined App Risk (ML + Other Signals)</span>
                 <span class="drill-stat-value" style="color:${riskColor(score)}">${score.toFixed(1)}</span>
               </div>
               <div class="drill-stat">
@@ -1120,7 +1127,7 @@
             const bRisk = parseFloat(pred.behavioral_risk || 0);
             html += `
               <div class="drill-stat">
-                <span class="drill-stat-label">Behavioral Risk (RVFL)</span>
+                <span class="drill-stat-label">ML Display Adapter (Not a Probability)</span>
                 <span class="drill-stat-value" style="color:${riskColor(bRisk)}">${bRisk.toFixed(1)}</span>
               </div>`;
             
@@ -1141,6 +1148,69 @@
           }
 
           if (!html) html = '<div class="empty-state"><div class="empty-state-text">No predictions available for this user</div></div>';
+
+          if (pred && pred.advanced_pipeline) {
+            const fc = pred.advanced_pipeline.contributions || {};
+            const components = fc.score_components;
+            const number = value => value == null ? 'Unavailable' : Number(value).toPrecision(6);
+            html += `<section aria-label="Model score explanation" style="margin-top:20px">
+              <h4>Model Score and SHAP Evidence</h4>
+              <p style="color:var(--text-muted);font-size:12px">${safe(fc.model_version || '')} · ${safe(fc.mode || '')}</p>`;
+            if (username.startsWith('SYNTHETIC_')) html += '<p><strong>Synthetic demonstration only. No real employee or endpoint is represented.</strong></p>';
+            if (components) {
+              html += `<div class="drill-stat"><span class="drill-stat-label">Raw score_v2</span><strong>${number(fc.score_v2)}</strong></div>
+                <p style="font-size:12px;overflow-wrap:anywhere">max error ${number(components.max_error)} ×
+                mean error ${number(components.mean_error)} × √${components.sequence_count} = ${number(fc.score_v2)}</p>
+                <p style="color:var(--text-muted);font-size:12px">Errors use target-scaled fused risk.
+                Live history is bounded to supplied observations; this is not a lifetime score.
+                The display adapter is min(score_v2 × 1000, 100), not a calibrated probability.</p>`;
+            } else {
+              html += `<p>Building history: score_v2 is unavailable until eight observations exist.
+                The temporary display uses Isolation Forest risk × 100; XGBoost SHAP remains available.</p>`;
+            }
+            const evidence = fc.explanations;
+            if (evidence && evidence.available) {
+              html += `<p style="font-size:12px">SHAP explains <strong>XGBoost scenario margins, not score_v2 or combined app risk</strong>.
+                Positive values support the named class; negative values oppose it. They are not probability points or proof of intent.</p>
+                <p style="color:var(--text-muted);font-size:12px">Tree-path background includes SMOTE training samples.
+                Reference medians are comparisons, not the SHAP baseline.
+                Maximum additivity residual: ${number(evidence.max_additivity_residual)}.</p>`;
+              for (const day of evidence.key_dates || []) {
+                html += `<details data-shap-key="${safe(day.date)}" open style="margin:12px 0"><summary><strong>${safe(day.date.slice(0,10))}</strong>
+                  · ${safe(day.predicted_scenario)}${day.error == null ? '' : ' · squared error ' + number(day.error)}</summary>`;
+                if (day.error != null) html += `<p style="font-size:12px">Observed fused risk ${number(day.observed_fused_risk)};
+                  predicted ${number(day.predicted_fused_risk)}. This date was selected by prediction error.</p>`;
+                for (const explanation of day.xgboost_explanations || []) {
+                  const selected = [...(explanation.positive_features || []), ...(explanation.negative_features || [])];
+                  const maxMagnitude = Math.max(...selected.map(item => Math.abs(item.shap_raw_margin)), 1e-12);
+                  html += `<details data-shap-key="${safe(day.date + explanation.scenario)}" open style="margin:12px 0;padding:10px;border:1px solid var(--border)">
+                    <summary>${safe(explanation.scenario)} · probability ${(explanation.probability * 100).toFixed(2)}%
+                    · ${explanation.role === 'selected_threat_for_risk_fusion' ? 'Threat used in risk fusion' : 'Winning class'}</summary>
+                    <p style="font-size:12px">Base margin ${number(explanation.base_raw_margin)} + all feature contributions
+                    ${number(explanation.sum_shap_raw_margin)} = model margin ${number(explanation.output_raw_margin)}.</p>`;
+                  for (const item of selected) {
+                    const positive = item.shap_raw_margin > 0;
+                    const color = positive ? '#f59e0b' : '#38bdf8';
+                    html += `<div style="margin:8px 0;font-size:12px;overflow-wrap:anywhere">
+                      ${safe(item.feature)}: value ${number(item.observed_value)};
+                      <strong style="color:${color}">${positive ? '+' : ''}${number(item.shap_raw_margin)} (${positive ? 'supports' : 'opposes'})</strong>
+                      <div style="height:4px;margin-top:4px;width:${100 * Math.abs(item.shap_raw_margin) / maxMagnitude}%;background:${color}"></div></div>`;
+                  }
+                  html += `<details data-shap-key="${safe(day.date + explanation.scenario + '-features')}"><summary>All Features and Comparison Values</summary><div style="overflow-x:auto">
+                    <table><thead><tr><th>Feature</th><th>Observed</th><th>Normal Training Median</th><th>Prior Median</th><th>Signed SHAP</th></tr></thead><tbody>`;
+                  for (const item of explanation.all_features || []) html += `<tr>
+                    <td>${safe(item.feature)}</td><td>${number(item.observed_value)}</td>
+                    <td>${number(item.normal_training_median)}</td><td>${number(item.preceding_7_observations_median)}</td>
+                    <td>${item.shap_raw_margin > 0 ? '+' : ''}${number(item.shap_raw_margin)}</td></tr>`;
+                  html += '</tbody></table></div></details></details>';
+                }
+                html += '</details>';
+              }
+            } else {
+              html += `<p>SHAP evidence unavailable: ${safe(evidence?.reason || 'No explanation recorded.')}</p>`;
+            }
+            html += '</section>';
+          }
           
           // Add Heuristics section
           if (riskScores.length) {
@@ -1162,6 +1232,9 @@
           }
 
           document.getElementById('drillPredictions').innerHTML = html;
+          document.querySelectorAll('#drillPredictions details[data-shap-key]').forEach(element => {
+            if (detailState.has(element.dataset.shapKey)) element.open = detailState.get(element.dataset.shapKey);
+          });
 
           // Feature Contributions chart
           let domainScores = {};

@@ -1,10 +1,11 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH="/app"
+    PYTHONPATH="/app" \
+    INSIEDR_MODEL_INFERENCE_DIR="/app/model"
 
 # Install system dependencies (libpq-dev for postgres, libgomp1 for XGBoost/ML OpenMP, curl for healthchecks)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -16,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements files first to leverage Docker cache
 COPY requirements.txt requirements-postgres.txt ./
+COPY model/requirements-shap.txt ./model/requirements-shap.txt
 
 # Install python dependencies and gunicorn
 RUN pip install --no-cache-dir -r requirements.txt -r requirements-postgres.txt gunicorn
