@@ -1,0 +1,394 @@
+================================================================================
+INSIEDR EXPLICIT SHAP FINDINGS: MULTI-FEED CROSS-DOMAIN ATTRIBUTIONS
+================================================================================
+Coverage: 10 top workstations in Fleet Triage Queue.
+SHAP explains Tier 2 XGBoost scenario raw margins and Tier 1 domain baseline anomalies.
+Positive SHAP increases threat raw margin; negative SHAP opposes that class.
+Normal training medians provide reference baselines from clean background operations.
+================================================================================
+
+--------------------------------------------------------------------------------
+WORKSTATION SOCL4-61 | Fleet Rank #1 | Score: 28.78 | Scenario: SIM_KILL_CHAIN
+RedRVFL Drift Error: 0.358100 | Triggered Feeds: decoy-monitor, file-integrity-monitor, http, lsass-monitor, process-watcher, short-term_edr_feature
+--------------------------------------------------------------------------------
+  FEED: decoy-monitor @ 2026-10-12 10:42:18 | Fused Risk: 1.0000 | Scenario: ZERO_SHOT_ANOMALY
+  FEED: decoy-monitor @ 2026-10-12 10:42:24 | Fused Risk: 1.0000 | Scenario: ZERO_SHOT_ANOMALY
+  FEED: file-integrity-monitor @ 2026-10-12 10:42:19 | Fused Risk: 1.0000 | Scenario: USB_EXFILTRATION_PRECURSOR
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_new_filename_count: observed=25.0000; baseline_median=0.0000; SHAP=+3.1202
+      event_count: observed=25.0000; baseline_median=4.0000; SHAP=+1.0925
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=+0.5350
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.3523
+    OPPOSING THREAT FEATURES (- SHAP):
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0222
+  FEED: file-integrity-monitor @ 2026-10-12 10:42:24 | Fused Risk: 1.0000 | Scenario: USB_EXFILTRATION_PRECURSOR
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_new_filename_count: observed=25.0000; baseline_median=0.0000; SHAP=+3.1202
+      event_count: observed=25.0000; baseline_median=4.0000; SHAP=+1.0925
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=+0.5350
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.3523
+    OPPOSING THREAT FEATURES (- SHAP):
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0222
+  FEED: http @ 2026-10-12 12:15:19 | Fused Risk: 1.0000 | Scenario: CLOUD_EXFILTRATION_PRECURSOR
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      cloud_storage_uploads: observed=5.0000; baseline_median=0.0000; SHAP=+5.7377
+    OPPOSING THREAT FEATURES (- SHAP):
+      http_after_hours: observed=0.0000; baseline_median=0.0000; SHAP=-0.8326
+      watchlisted_domain_hits: observed=2.0000; baseline_median=0.0000; SHAP=-0.0853
+      suspicious_url_count: observed=3.0000; baseline_median=0.0000; SHAP=-0.0448
+  FEED: http @ 2026-10-12 11:30:03 | Fused Risk: 1.0000 | Scenario: CLOUD_EXFILTRATION_PRECURSOR
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      cloud_storage_uploads: observed=5.0000; baseline_median=0.0000; SHAP=+5.7377
+    OPPOSING THREAT FEATURES (- SHAP):
+      http_after_hours: observed=0.0000; baseline_median=0.0000; SHAP=-0.8326
+      watchlisted_domain_hits: observed=2.0000; baseline_median=0.0000; SHAP=-0.0853
+      suspicious_url_count: observed=3.0000; baseline_median=0.0000; SHAP=-0.0448
+  FEED: lsass-monitor @ 2026-10-12 09:27:59 | Fused Risk: 1.0000 | Scenario: CREDENTIAL_DUMP
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=2.0000; baseline_median=0.0000; SHAP=-2.6189
+      handle_requests: observed=12.0000; baseline_median=0.0000; SHAP=-1.0143
+  FEED: lsass-monitor @ 2026-10-12 09:28:04 | Fused Risk: 1.0000 | Scenario: CREDENTIAL_DUMP
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=2.0000; baseline_median=0.0000; SHAP=-2.6189
+      handle_requests: observed=12.0000; baseline_median=0.0000; SHAP=-1.0143
+  FEED: process-watcher @ 2026-10-12 05:33:04 | Fused Risk: 0.5653 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=219.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+  FEED: process-watcher @ 2026-10-12 03:23:38 | Fused Risk: 0.5653 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=219.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+  FEED: short-term_edr_feature @ 2026-10-12 09:27:59 | Fused Risk: 1.0000 | Scenario: CREDENTIAL_DUMP
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      auth_rate_300s: observed=3.0000; baseline_median=0.0000; SHAP=+4.3068
+      edr_auth_event_count_window: observed=15.0000; baseline_median=0.0000; SHAP=+1.5239
+      edr_auth_events_per_minute_window: observed=3.0000; baseline_median=0.0000; SHAP=+0.3104
+      off_hours_auth_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+  FEED: short-term_edr_feature @ 2026-10-12 09:28:04 | Fused Risk: 1.0000 | Scenario: CREDENTIAL_DUMP
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      auth_rate_300s: observed=3.0000; baseline_median=0.0000; SHAP=+4.3068
+      edr_auth_event_count_window: observed=15.0000; baseline_median=0.0000; SHAP=+1.5239
+      edr_auth_events_per_minute_window: observed=3.0000; baseline_median=0.0000; SHAP=+0.3104
+      off_hours_auth_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+
+--------------------------------------------------------------------------------
+WORKSTATION SOCL8-03 | Fleet Rank #2 | Score: 17.51 | Scenario: SIM_HONEYTOKEN_TRIP
+RedRVFL Drift Error: 0.406200 | Triggered Feeds: decoy-monitor, file-integrity-monitor, logon, process-watcher
+--------------------------------------------------------------------------------
+  FEED: decoy-monitor @ 2026-10-12 07:29:26 | Fused Risk: 1.0000 | Scenario: ZERO_SHOT_ANOMALY
+  FEED: decoy-monitor @ 2026-10-12 07:29:21 | Fused Risk: 1.0000 | Scenario: ZERO_SHOT_ANOMALY
+  FEED: file-integrity-monitor @ 2026-10-12 07:47:35 | Fused Risk: 0.5936 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=5.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=5.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=5.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: file-integrity-monitor @ 2026-10-12 08:20:35 | Fused Risk: 0.5936 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=5.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=5.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=5.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: logon @ 2026-10-12 07:29:26 | Fused Risk: 1.0000 | Scenario: ZERO_SHOT_ANOMALY
+  FEED: logon @ 2026-10-12 07:29:21 | Fused Risk: 1.0000 | Scenario: ZERO_SHOT_ANOMALY
+  FEED: process-watcher @ 2026-10-12 06:05:51 | Fused Risk: 0.5653 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=219.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+  FEED: process-watcher @ 2026-10-12 06:05:56 | Fused Risk: 0.5653 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=219.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+
+--------------------------------------------------------------------------------
+WORKSTATION DESKTOP-0O03IU9 | Fleet Rank #3 | Score: 4.18 | Scenario: BENIGN
+RedRVFL Drift Error: 0.041400 | Triggered Feeds: http, process-watcher
+--------------------------------------------------------------------------------
+  FEED: http @ 2026-10-11 10:36:36 | Fused Risk: 0.6306 | Scenario: CLOUD_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      cloud_storage_uploads: observed=0.0000; baseline_median=0.0000; SHAP=-3.4610
+      http_after_hours: observed=0.0000; baseline_median=0.0000; SHAP=-0.8326
+      watchlisted_domain_hits: observed=0.0000; baseline_median=0.0000; SHAP=-0.0853
+      suspicious_url_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.0448
+  FEED: http @ 2026-10-11 10:37:31 | Fused Risk: 0.6306 | Scenario: CLOUD_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      cloud_storage_uploads: observed=0.0000; baseline_median=0.0000; SHAP=-3.4610
+      http_after_hours: observed=0.0000; baseline_median=0.0000; SHAP=-0.8326
+      watchlisted_domain_hits: observed=0.0000; baseline_median=0.0000; SHAP=-0.0853
+      suspicious_url_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.0448
+  FEED: process-watcher @ 2026-10-11 09:46:46 | Fused Risk: 0.8124 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=140.0000; baseline_median=214.0000; SHAP=-0.0368
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+  FEED: process-watcher @ 2026-10-11 09:46:51 | Fused Risk: 0.7750 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=146.0000; baseline_median=214.0000; SHAP=-0.0368
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+
+--------------------------------------------------------------------------------
+WORKSTATION SOCL8-01 | Fleet Rank #4 | Score: 3.92 | Scenario: BENIGN
+RedRVFL Drift Error: 0.003700 | Triggered Feeds: devices, process-watcher
+--------------------------------------------------------------------------------
+  FEED: devices @ 2026-10-12 03:25:26 | Fused Risk: 0.5816 | Scenario: USB_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      daily_device_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-2.8893
+      usb_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-1.0168
+      usb_devices_count: observed=1.0000; baseline_median=0.0000; SHAP=-0.3435
+  FEED: devices @ 2026-10-12 03:25:31 | Fused Risk: 0.5816 | Scenario: USB_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      daily_device_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-2.8893
+      usb_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-1.0168
+      usb_devices_count: observed=1.0000; baseline_median=0.0000; SHAP=-0.3435
+  FEED: process-watcher @ 2026-10-12 03:41:06 | Fused Risk: 0.5653 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=219.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+  FEED: process-watcher @ 2026-10-12 03:40:16 | Fused Risk: 0.5578 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=221.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+
+--------------------------------------------------------------------------------
+WORKSTATION SANDY | Fleet Rank #5 | Score: 3.34 | Scenario: BENIGN
+RedRVFL Drift Error: 0.036600 | Triggered Feeds: file-integrity-monitor, process-watcher
+--------------------------------------------------------------------------------
+  FEED: file-integrity-monitor @ 2026-10-11 16:25:43 | Fused Risk: 0.4673 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=1.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=1.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=1.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: file-integrity-monitor @ 2026-10-11 16:25:58 | Fused Risk: 0.4673 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=1.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=1.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=1.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: process-watcher @ 2026-10-11 16:24:41 | Fused Risk: 1.0000 | Scenario: CREDENTIAL_DUMP
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_unique_process_count: observed=306.0000; baseline_median=214.0000; SHAP=+0.0123
+      etw_realtime_active: observed=1.0000; baseline_median=1.0000; SHAP=+0.0004
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.1446
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0667
+  FEED: process-watcher @ 2026-10-11 16:24:58 | Fused Risk: 1.0000 | Scenario: CREDENTIAL_DUMP
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_unique_process_count: observed=305.0000; baseline_median=214.0000; SHAP=+0.0123
+      etw_realtime_active: observed=1.0000; baseline_median=1.0000; SHAP=+0.0004
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.1446
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0667
+
+--------------------------------------------------------------------------------
+WORKSTATION SOCL5-46 | Fleet Rank #6 | Score: 3.14 | Scenario: BENIGN
+RedRVFL Drift Error: 0.000000 | Triggered Feeds: file-integrity-monitor, process-watcher
+--------------------------------------------------------------------------------
+  FEED: file-integrity-monitor @ 2026-10-12 03:16:57 | Fused Risk: 1.0000 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: file-integrity-monitor @ 2026-10-12 03:17:02 | Fused Risk: 1.0000 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: process-watcher @ 2026-10-12 03:17:50 | Fused Risk: 0.5653 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=219.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+  FEED: process-watcher @ 2026-10-12 03:19:15 | Fused Risk: 0.5653 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=219.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+
+--------------------------------------------------------------------------------
+WORKSTATION CSL-28 | Fleet Rank #7 | Score: 2.69 | Scenario: BENIGN
+RedRVFL Drift Error: 0.000000 | Triggered Feeds: devices, file-integrity-monitor, process-watcher
+--------------------------------------------------------------------------------
+  FEED: devices @ 2026-10-12 09:52:20 | Fused Risk: 0.5816 | Scenario: USB_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      daily_device_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-2.8893
+      usb_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-1.0168
+      usb_devices_count: observed=1.0000; baseline_median=0.0000; SHAP=-0.3435
+  FEED: devices @ 2026-10-12 09:52:25 | Fused Risk: 0.5816 | Scenario: USB_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      daily_device_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-2.8893
+      usb_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-1.0168
+      usb_devices_count: observed=1.0000; baseline_median=0.0000; SHAP=-0.3435
+  FEED: file-integrity-monitor @ 2026-10-12 09:52:20 | Fused Risk: 0.6513 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: file-integrity-monitor @ 2026-10-12 09:52:25 | Fused Risk: 0.6513 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: process-watcher @ 2026-10-12 09:54:41 | Fused Risk: 1.0000 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      etw_realtime_active: observed=1.0000; baseline_median=1.0000; SHAP=+0.0008
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=100.0000; baseline_median=214.0000; SHAP=-0.0411
+  FEED: process-watcher @ 2026-10-12 09:54:37 | Fused Risk: 1.0000 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      etw_realtime_active: observed=1.0000; baseline_median=1.0000; SHAP=+0.0008
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=100.0000; baseline_median=214.0000; SHAP=-0.0411
+
+--------------------------------------------------------------------------------
+WORKSTATION SOCL5-42 | Fleet Rank #8 | Score: 2.49 | Scenario: BENIGN
+RedRVFL Drift Error: 0.000000 | Triggered Feeds: devices, file-integrity-monitor, process-watcher
+--------------------------------------------------------------------------------
+  FEED: devices @ 2026-10-12 03:18:40 | Fused Risk: 0.5816 | Scenario: USB_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      daily_device_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-2.8893
+      usb_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-1.0168
+      usb_devices_count: observed=1.0000; baseline_median=0.0000; SHAP=-0.3435
+  FEED: devices @ 2026-10-12 03:18:45 | Fused Risk: 0.5816 | Scenario: USB_EXFILTRATION_PRECURSOR
+    OPPOSING THREAT FEATURES (- SHAP):
+      daily_device_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-2.8893
+      usb_connect_count: observed=1.0000; baseline_median=0.0000; SHAP=-1.0168
+      usb_devices_count: observed=1.0000; baseline_median=0.0000; SHAP=-0.3435
+  FEED: file-integrity-monitor @ 2026-10-12 03:18:40 | Fused Risk: 0.6513 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: file-integrity-monitor @ 2026-10-12 03:18:45 | Fused Risk: 0.6513 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: process-watcher @ 2026-10-12 03:23:35 | Fused Risk: 0.5538 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=223.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+  FEED: process-watcher @ 2026-10-12 03:23:40 | Fused Risk: 0.5538 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      tunneling_process_count: observed=0.0000; baseline_median=0.0000; SHAP=+0.0001
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.2616
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0955
+      daily_unique_process_count: observed=223.0000; baseline_median=214.0000; SHAP=-0.0389
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0035
+
+--------------------------------------------------------------------------------
+WORKSTATION VS | Fleet Rank #9 | Score: 2.32 | Scenario: BENIGN
+RedRVFL Drift Error: 0.000000 | Triggered Feeds: file-integrity-monitor
+--------------------------------------------------------------------------------
+  FEED: file-integrity-monitor @ 2026-10-12 03:18:34 | Fused Risk: 1.0000 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: file-integrity-monitor @ 2026-10-12 03:18:39 | Fused Risk: 1.0000 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=16.0000; baseline_median=4.0000; SHAP=-0.0280
+
+--------------------------------------------------------------------------------
+WORKSTATION SOCL5-48 | Fleet Rank #10 | Score: 2.04 | Scenario: BENIGN
+RedRVFL Drift Error: 0.000000 | Triggered Feeds: file-integrity-monitor, process-watcher
+--------------------------------------------------------------------------------
+  FEED: file-integrity-monitor @ 2026-10-12 03:17:58 | Fused Risk: 0.6513 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: file-integrity-monitor @ 2026-10-12 03:18:03 | Fused Risk: 0.6513 | Scenario: IT_SABOTAGE
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_file_access_entropy: observed=0.0000; baseline_median=0.0000; SHAP=+0.0040
+    OPPOSING THREAT FEATURES (- SHAP):
+      event_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.2569
+      file_access_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.1297
+      daily_unique_filename_count: observed=13.0000; baseline_median=4.0000; SHAP=-0.0280
+  FEED: process-watcher @ 2026-10-12 03:24:58 | Fused Risk: 0.8735 | Scenario: CREDENTIAL_DUMP
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_unique_process_count: observed=293.0000; baseline_median=214.0000; SHAP=+0.0158
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.1446
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0667
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0031
+  FEED: process-watcher @ 2026-10-12 03:25:03 | Fused Risk: 0.8270 | Scenario: CREDENTIAL_DUMP
+    SUPPORTING THREAT FEATURES (+ SHAP):
+      daily_unique_process_count: observed=284.0000; baseline_median=214.0000; SHAP=+0.0158
+    OPPOSING THREAT FEATURES (- SHAP):
+      admin_process_count: observed=0.0000; baseline_median=0.0000; SHAP=-0.1446
+      executables_from_temp_folder: observed=0.0000; baseline_median=0.0000; SHAP=-0.0667
+      etw_realtime_active: observed=0.0000; baseline_median=1.0000; SHAP=-0.0031

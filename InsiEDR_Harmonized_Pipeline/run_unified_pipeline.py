@@ -35,6 +35,7 @@ from src.domain_isolation_forest import DomainIsolationForest
 from src.scenario_classifier_xgb import ScenarioXGBClassifier
 from src.temporal_risk_aggregator import TemporalRiskAggregator
 from src.red_rvfl_orchestrator import RedRVFLOrchestrator
+from src.shap_explainer import InsiEDRShapExplainer
 import joblib
 
 OUTPUT_DIR = os.path.join(current_dir, "output")
@@ -69,7 +70,9 @@ def main():
     # Container for all scored test and train observations across feeds
     all_train_scored_records = []
     all_test_scored_records = []
+    test_dfs_by_feed = {}
     feed_summaries = {}
+    shap_explainer = InsiEDRShapExplainer()
 
     start_total_time = time.time()
 
@@ -135,6 +138,10 @@ def main():
         train_df["scenario_prob"] = train_scen
         train_df["fused_risk"] = np.maximum(train_anom, 0.3 * train_anom + 0.7 * train_scen)
         all_train_scored_records.append(train_df[keep_cols].copy())
+        test_dfs_by_feed[cname] = test_df.copy()
+
+        # Register feed into Tier 2 TreeSHAP Explainer
+        shap_explainer.register_feed(cname, xgb_clf, feat_cols, train_df[clean_train_mask], dom_if=dom_if)
 
         # 4. Save trained models to models/ directory
         if_model_name = f"{cname}_domain_if.joblib"
@@ -251,6 +258,54 @@ def main():
     ranked_fleet.to_csv(os.path.join(OUTPUT_DIR, "unified_fleet_triage_rankings.csv"), index=False)
     eval_df.to_csv(os.path.join(OUTPUT_DIR, "unified_top_k_evaluation.csv"), index=False)
 
+    # -------------------------------------------------------------
+    # TIER 4: LOCAL TreeSHAP EXPLAINABILITY ENGINE
+    # -------------------------------------------------------------
+    print("\n" + "=" * 80)
+    print("TIER 4: EXPLAINING FLAGGED EVENTS & TRIAGE QUEUE VIA LOCAL TreeSHAP")
+    print("=" * 80)
+
+    # Serialize SHAP explainer
+    shap_model_name = "tier2_shap_explainer.joblib"
+    joblib.dump(shap_explainer, os.path.join(MODELS_DIR, shap_model_name))
+    print(f"Saved Tier 2 SHAP Explainer model to: {os.path.join(MODELS_DIR, shap_model_name)}")
+
+    feed_summaries["tier2_shap_explainer"] = {
+        "model_file": shap_model_name,
+        "registered_feeds": shap_explainer.registered_feeds,
+        "explainer_type": "TreeSHAP_Local_Margins",
+        "mathematical_contract": "base_margin + sum(shap_values) == output_margin"
+    }
+    with open(os.path.join(MODELS_DIR, "models_manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(feed_summaries, f, indent=2)
+
+    print("Generating signed SHAP explanations for top triage queue hosts and flagged events...")
+    workstation_explanations = shap_explainer.explain_workstation_incidents(
+        ranked_fleet,
+        test_dfs_by_feed,
+        top_n_hosts=10,
+        max_events_per_feed=2
+    )
+    shap_explainer.export_explanations(workstation_explanations, OUTPUT_DIR)
+
+    print("\n" + "=" * 90)
+    print("EXPLICIT SHAP EVIDENCE: TOP FLAGGED THREAT WORKSTATIONS")
+    print("=" * 90)
+    for host in workstation_explanations[:2]:
+        print(f"\n[HOST: {host['hostname']}] Rank #{host['rank']} | Threat: {host['threat_scenario']} | Score: {host['host_score']:.2f} | RedRVFL Drift: {host['rvfl_drift_error']:.6f}")
+        for ev in host["explained_events"]:
+            feed = ev["feed"]
+            s_ev = ev["shap_evidence"]
+            scen = s_ev.get("predicted_scenario", "N/A")
+            prob = s_ev.get("scenario_probability", ev["scenario_prob"])
+            print(f"  > Feed: {feed:24s} | Fused: {ev['fused_risk']:.4f} | Scenario: {scen} ({prob:.2%})")
+            if "base_raw_margin" in s_ev:
+                print(f"    Margin: Base {s_ev['base_raw_margin']:.4f} + Sum(SHAP) {s_ev['sum_shap_raw_margin']:+.4f} = Output {s_ev['output_raw_margin']:.4f} (Res: {s_ev['additivity_residual']:1.2e})")
+            top_feats = s_ev.get("top_features", [])[:3]
+            for tf in top_feats:
+                s_val = tf.get("shap_raw_margin", tf.get("deviation", 0.0))
+                print(f"      - {tf['feature']:28s} | Observed: {tf['observed_value']:8.2f} | Normal Median: {tf['normal_training_median']:8.2f} | SHAP: {s_val:+8.4f} ({tf.get('direction', tf.get('impact', ''))})")
+
     # Save complete JSON summary
     summary = {
         "execution_time_seconds": round(time.time() - start_total_time, 2),
@@ -265,7 +320,13 @@ def main():
             }
             for _, r in ranked_fleet[ranked_fleet["is_threat_host"] == 1].iterrows()
         },
-        "top_k_table": eval_records
+        "top_k_table": eval_records,
+        "shap_explanations": {
+            "summary_json": os.path.join(OUTPUT_DIR, "explanations", "flagged_events_shap_summary.json"),
+            "attributions_csv": os.path.join(OUTPUT_DIR, "explanations", "flagged_events_shap_attributions.csv"),
+            "report_markdown": os.path.join(OUTPUT_DIR, "explanations", "SHAP_EXPLANATIONS_REPORT.md"),
+            "findings_txt": os.path.join(OUTPUT_DIR, "explanations", "SHAP_FINDINGS.txt")
+        }
     }
 
     with open(os.path.join(OUTPUT_DIR, "unified_pipeline_summary.json"), "w", encoding="utf-8") as f:

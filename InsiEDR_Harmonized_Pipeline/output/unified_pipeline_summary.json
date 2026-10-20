@@ -1,5 +1,5 @@
 {
-  "execution_time_seconds": 13.54,
+  "execution_time_seconds": 14.26,
   "total_test_hosts": 23,
   "total_threat_hosts": 2,
   "threat_host_ranks": {
@@ -71,5 +71,11 @@
       "Precision": "10.0%",
       "F1_Score": 0.1818
     }
-  ]
+  ],
+  "shap_explanations": {
+    "summary_json": "D:\\AISH\\InsiEDR_Harmonized_Pipeline\\output\\explanations\\flagged_events_shap_summary.json",
+    "attributions_csv": "D:\\AISH\\InsiEDR_Harmonized_Pipeline\\output\\explanations\\flagged_events_shap_attributions.csv",
+    "report_markdown": "D:\\AISH\\InsiEDR_Harmonized_Pipeline\\output\\explanations\\SHAP_EXPLANATIONS_REPORT.md",
+    "findings_txt": "D:\\AISH\\InsiEDR_Harmonized_Pipeline\\output\\explanations\\SHAP_FINDINGS.txt"
+  }
 }

@@ -173,5 +173,20 @@
     "model_file": "tier3_red_rvfl_orchestrator.joblib",
     "clean_training_hosts": 129,
     "test_sequences_evaluated": 161
+  },
+  "tier2_shap_explainer": {
+    "model_file": "tier2_shap_explainer.joblib",
+    "registered_feeds": [
+      "short-term_edr_feature",
+      "decoy-monitor",
+      "logon",
+      "lsass-monitor",
+      "process-watcher",
+      "devices",
+      "file-integrity-monitor",
+      "http"
+    ],
+    "explainer_type": "TreeSHAP_Local_Margins",
+    "mathematical_contract": "base_margin + sum(shap_values) == output_margin"
   }
 }

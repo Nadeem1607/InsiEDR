@@ -72,11 +72,55 @@ The 4-stage kill-chain on `SOCL4-61` spanned **3.5 continuous hours** (`2026-10-
 4. **Stage 4 (11:30–12:30) - Cloud Exfiltration**:
    * Captured by `http` and `network` (external upload bursts and outbound connection anomalies).
 
-Because `SOCL4-61` accumulated active anomalous ticks across **all 4 tactical phases**, its persistence multiplier escalated its score to **3.7852**, completely separating it from benign background workstations that only produced brief, isolated spikes in a single collector.
+Because `SOCL4-61` accumulated active anomalous ticks across **all 4 tactical phases**, its persistence multiplier escalated its score to **28.7814**, completely separating it from benign background workstations that only produced brief, isolated spikes in a single collector.
 
 ---
 
-## 5. Architectural Comparison: Harmonized Telemetry vs. CERT 4.2 vs. CERT 6.2
+## 5. Tier 3 Deep RedRVFL Sequential Drift Modeling
+
+To capture subtle temporal escalation and sudden behavioral shifts, **Tier 3 Deep RedRVFL (Random Vector Functional Link)** models sequential risk trajectories:
+- **Architecture**: 3-layer stacked `RandomLSTM` (hidden size 64) with direct input-to-output skip connections and Ridge regression closed-form readout.
+- **Sequential Contract**: A 5-tick rolling window of cross-domain risk forecasts the expected nominal risk for the subsequent tick.
+- **Sequence Drift Error**:
+  $$\text{drift\_error} = (y_{\text{observed}} - \hat{y}_{\text{rvfl}})^2$$
+- **Empirical Validation**:
+  - `SOCL4-61` (Multi-stage Kill-Chain): **Drift Error = 0.358100** (massive unexpected risk explosion).
+  - `SOCL8-03` (Honeytoken Trip): **Drift Error = 0.406200** (sudden step-function anomaly).
+  - Benign Fleet: Mean Drift Error = **0.000000 to 0.041400** (perfect stability conforming to baseline).
+
+---
+
+## 6. Tier 4 Local TreeSHAP Explainability Engine
+
+Directly ported from `InsiEDR_Model_Updated`, **Tier 4 Local TreeSHAP** mathematically unpacks every flagged event and explains why each workstation was placed at the top of the fleet triage queue:
+
+### 1. Mathematical Guarantee
+$$\text{output\_raw\_margin} = \text{base\_raw\_margin} + \sum_{i=1}^{P} \text{SHAP}_i$$
+Verified across all evaluated scenario classes with maximum additivity residual $\le 10^{-6}$.
+
+### 2. Threat Attributions for Top Flagged Hosts
+
+#### Workstation `SOCL4-61` (Rank #1 | Score: 28.78 | 4-Stage APT):
+- **Stage 1 (LSASS / Lateral Movement)**:
+  - `short-term_edr_feature`: `auth_rate_300s = 3.0` (baseline `0.0`) $\to$ **SHAP = +4.3068** (increases threat risk).
+  - `short-term_edr_feature`: `edr_auth_event_count_window = 15.0` (baseline `0.0`) $\to$ **SHAP = +1.5239** (increases threat risk).
+- **Stage 3 (File Modification / Staging)**:
+  - `file-integrity-monitor`: `daily_new_filename_count = 25.0` (baseline `0.0`) $\to$ **SHAP = +3.1202** (increases threat risk).
+  - `file-integrity-monitor`: `event_count = 25.0` (baseline `4.0`) $\to$ **SHAP = +1.0925** (increases threat risk).
+  - `decoy-monitor`: Canary honeytoken accessed (`events_recorded = 1.0`, baseline `0.0`).
+- **Stage 4 (Cloud Exfiltration)**:
+  - `http`: `cloud_storage_uploads = 5.0` (baseline `0.0`) $\to$ **SHAP = +5.7377** (increases threat risk towards `CLOUD_EXFILTRATION_PRECURSOR`).
+  - Base margin $-4.4163$ + Sum(SHAP) $+4.7751$ = Output margin $0.3587$ (threat probability jumps from baseline $<0.1\%$ to $58.87\%$).
+
+#### Workstation `SOCL8-03` (Rank #2 | Score: 17.51 | Honeytoken Trip):
+- `decoy-monitor`: Honeytoken canary file read (`current_size = 420.0` vs baseline `36.0`, baseline deviation $+384.0$).
+- `logon`: Authentication burst (`failed_logons = 3.0`, `after_hours_logon = 1.0`).
+- `short-term_edr_feature`: Off-hours auth spike (`off_hours_auth_count = 0` nominal, auth rate anomaly).
+- `file-integrity-monitor`: File modification checks.
+
+---
+
+## 7. Architectural Comparison: Harmonized Telemetry vs. CERT 4.2 vs. CERT 6.2
 
 | Evaluation Factor | CERT r4.2 Benchmark | CERT r6.2 Benchmark | Candidate Harmonized Pipeline |
 | :--- | :--- | :--- | :--- |
@@ -85,13 +129,18 @@ Because `SOCL4-61` accumulated active anomalous ticks across **all 4 tactical ph
 | **Cheat Feature Dependence** | None (used daily counters). | None (used daily counters). | **Zero**: Stripped all simulator booleans (`mimikatz_signatures`, `threat_triggered`, etc.). |
 | **Top-1 Detection Precision** | 60.0% (top 5 review). | 0.0% (zero-shot) to 100% (with user leakage). | **100.0% Precision at Top-1** (0 false positives). |
 | **APT Kill-Chain Detection** | Blind to intraday phases (daily aggregate only). | Blind to intraday phases (daily aggregate only). | **Continuous Intraday Correlation** across all 4 tactical phases. |
+| **Explainability Engine** | None / basic feature weights. | Global tree SHAP domain weights. | **Exact Local TreeSHAP per Flagged Event** with signed margin breakdown and normal baseline comparisons. |
 
 ---
 
-## 6. Generated Output Artifacts
+## 8. Generated Output Artifacts
 
-All model outputs, predictions, and triage rankings have been persisted to disk:
+All model outputs, predictions, triage rankings, and SHAP explainability artifacts have been persisted to disk:
 * **Fleet Triage Rankings CSV**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\output\unified_fleet_triage_rankings.csv`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/output/unified_fleet_triage_rankings.csv)
 * **Top-K Evaluation Metrics CSV**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\output\unified_top_k_evaluation.csv`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/output/unified_top_k_evaluation.csv)
 * **Master Pipeline JSON Summary**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\output\unified_pipeline_summary.json`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/output/unified_pipeline_summary.json)
-* **Dataset Validation Benchmark MD**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\DATASET_VALIDATION_COMPARISON.md`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/DATASET_VALIDATION_COMPARISON.md)
+* **SHAP Explainability Summary JSON**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\output\explanations\flagged_events_shap_summary.json`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/output/explanations/flagged_events_shap_summary.json)
+* **SHAP Local Feature Attributions CSV**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\output\explanations\flagged_events_shap_attributions.csv`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/output/explanations/flagged_events_shap_attributions.csv)
+* **SHAP Comprehensive Report MD**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\output\explanations\SHAP_EXPLANATIONS_REPORT.md`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/output/explanations/SHAP_EXPLANATIONS_REPORT.md)
+* **SHAP Text Findings TXT**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\output\explanations\SHAP_FINDINGS.txt`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/output/explanations/SHAP_FINDINGS.txt)
+* **Serialized SHAP Explainer Model**: [`d:\AISH\InsiEDR_Harmonized_Pipeline\models\tier2_shap_explainer.joblib`](file:///d:/AISH/InsiEDR_Harmonized_Pipeline/models/tier2_shap_explainer.joblib)
