@@ -15,9 +15,13 @@ class TemporalRiskAggregator:
 
     def fuse_risk(self, anomaly_scores, scenario_probs):
         """
-        Combines Tier 1 anomaly scores and Tier 2 scenario probabilities.
+        Combines Tier 1 anomaly scores and Tier 2 scenario probabilities using adaptive dual-path fusion.
+        Ensures novel/zero-day attacks where scenario probability is 0 are not suppressed.
         """
-        return self.if_weight * np.array(anomaly_scores) + self.xgb_weight * np.array(scenario_probs)
+        anom = np.asarray(anomaly_scores, dtype=float)
+        scen = np.asarray(scenario_probs, dtype=float)
+        weighted = self.if_weight * anom + self.xgb_weight * scen
+        return np.maximum(anom, weighted)
 
     def rank_workstations(self, df_scored):
         """
