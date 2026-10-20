@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.zip
+.venv/
+Model_v2/cohorts/
+Model_v2/run_retrained/
+Model_v2/inference_check/

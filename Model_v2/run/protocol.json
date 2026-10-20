@@ -1,0 +1,82 @@
+{
+  "validation_seed": 63001,
+  "prospective_seed": 63002,
+  "representations": [
+    "level",
+    "hybrid",
+    "context"
+  ],
+  "specs": [
+    {
+      "name": "level_d2_cap5",
+      "rep": "level",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    {
+      "name": "level_d3_cap5",
+      "rep": "level",
+      "depth": 3,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    {
+      "name": "hybrid_d2_cap5",
+      "rep": "hybrid",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    {
+      "name": "hybrid_d3_cap5",
+      "rep": "hybrid",
+      "depth": 3,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    {
+      "name": "level_d2_cap20",
+      "rep": "level",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 20
+    },
+    {
+      "name": "context_d2_cap5",
+      "rep": "context",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    }
+  ],
+  "selection": "0.45 new-val AP + 0.30 original-val AP + 0.25 grouped-forward AP - 0.1 positive train-minus-group AP gap",
+  "seeds": [
+    20261021,
+    20261022
+  ],
+  "fusion": [
+    "weighted15",
+    "weighted35",
+    "novelty",
+    "reference"
+  ],
+  "ridge_alpha": [
+    10.0,
+    1000.0,
+    100000.0
+  ],
+  "error_modes": [
+    "absolute",
+    "upward"
+  ],
+  "temporal_selection": "max(min validation balanced accuracy + .05 min validation AP), subject to <=3% FPR per validation cohort",
+  "threshold": "Maximize minimum balanced accuracy across the two validation cohorts, <=3% FPR each.",
+  "host_ranking": "max error * mean error * sqrt(count), with exactly 15 eligible days for operational alerts."
+}

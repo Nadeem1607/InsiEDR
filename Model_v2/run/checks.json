@@ -1,0 +1,15 @@
+{
+  "model_frozen_unchanged": true,
+  "source_inputs_unchanged": true,
+  "prospective_generated_after_freeze": true,
+  "prospective_exact_training_duplicates": 0,
+  "label_free_reload_matches": true,
+  "grouped_forward_hosts_disjoint": true,
+  "normal_if_calibration_hosts_disjoint": true,
+  "tree_shap_max_margin_reconstruction_error": 2.86102294921875e-06,
+  "explanation_note": "Average per-booster margin contributions; these do not add to averaged probability or its logit.",
+  "ordered_inputs": 40,
+  "probabilities": 6,
+  "training_rows": 51840,
+  "clean_temporal_windows": 15857
+}

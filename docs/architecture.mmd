@@ -1,0 +1,19 @@
+flowchart TD
+    A[40 numeric daily behavioral features] --> B[Four domain Isolation Forests]
+    B --> C[Train-only normal-host upper-tail calibration]
+    C --> D[Exactly 40 ordered inputs: 32 behavior + 8 risk/context]
+    D --> E[Two regularized XGBoost models: six probabilities]
+    E --> F[Threat risk = 1 minus P normal]
+    C --> G[Fusion: 0.85 threat + 0.15 weighted IF risk]
+    F --> G
+    G --> H[Seven consecutive daily risks]
+    H --> I[RedRVFL: frozen random LSTM + skip + Ridge ensemble]
+    I --> J[Upward error: max actual risk minus forecast, 0]
+    J --> K[Latest 15 eligible daily errors per host]
+    K --> L[Score = max error times mean error times sqrt count]
+    L --> M[Top-K investigation queue]
+    M --> P[Analyst review: confirmation not assessed]
+    D -. same exact input rows .-> N[Native exact TreeSHAP per booster]
+    E -. signed class margins .-> N
+    L -. top 20 test hosts and 3 largest-error dates .-> N
+    N --> O[CSV + JSON + readable evidence]

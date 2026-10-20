@@ -1,0 +1,1922 @@
+[
+  {
+    "hostname": "SOCL5-14",
+    "date": "2026-03-18",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 2.8903717578961645,
+        "signed_margin_contribution": 3.839771270751953
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.713732805509369,
+        "signed_margin_contribution": -0.2137729823589325
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 0.6931471805599453,
+        "signed_margin_contribution": 0.11834591627120972
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 3.828641396489095,
+        "signed_margin_contribution": -0.10771657526493073
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9628146453089248,
+        "signed_margin_contribution": 0.09639859944581985
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5-14",
+    "date": "2026-03-25",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 2.833213344056216,
+        "signed_margin_contribution": 3.657660484313965
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 0.0,
+        "signed_margin_contribution": -0.4491979479789734
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.192362489474872,
+        "signed_margin_contribution": -0.2137729823589325
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 4.007333185232471,
+        "signed_margin_contribution": -0.10771657526493073
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9856979405034327,
+        "signed_margin_contribution": 0.09639859944581985
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5-14",
+    "date": "2026-03-27",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 3.091042453358316,
+        "signed_margin_contribution": 3.890871286392212
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 0.0,
+        "signed_margin_contribution": -0.4491979479789734
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.1779441140506,
+        "signed_margin_contribution": -0.2137729823589325
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 4.007333185232471,
+        "signed_margin_contribution": -0.10771657526493073
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9990465293668949,
+        "signed_margin_contribution": 0.07018043100833893
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-23",
+    "date": "2026-03-21",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 3.6109179126442243,
+        "signed_margin_contribution": 4.089515686035156
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 1.6094379124341003,
+        "signed_margin_contribution": 0.679902195930481
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 3.7612001156935624,
+        "signed_margin_contribution": 0.1212535947561264
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.7320747520976356,
+        "signed_margin_contribution": 0.10970936715602875
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 3.1780538303479458,
+        "signed_margin_contribution": 0.04372795671224594
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-23",
+    "date": "2026-03-22",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 3.6635616461296463,
+        "signed_margin_contribution": 4.092837810516357
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 1.9459101490553132,
+        "signed_margin_contribution": 0.679902195930481
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 3.367295829986474,
+        "signed_margin_contribution": 0.1212535947561264
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.7168192219679637,
+        "signed_margin_contribution": 0.10547593235969543
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 2.70805020110221,
+        "signed_margin_contribution": 0.04372795671224594
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-23",
+    "date": "2026-03-23",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 3.9512437185814275,
+        "signed_margin_contribution": 4.003750801086426
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 1.0986122886681098,
+        "signed_margin_contribution": 0.6619110107421875
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.8302822273073984,
+        "signed_margin_contribution": 0.10301985591650009
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.997212273764115,
+        "signed_margin_contribution": -0.10112673044204712
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 3.367295829986474,
+        "signed_margin_contribution": -0.029175350442528725
+      }
+    ]
+  },
+  {
+    "hostname": "DESKTOP-ST584BE",
+    "date": "2026-03-21",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.6931471805599453,
+        "signed_margin_contribution": 1.6714847087860107
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 1.6094379124341003,
+        "signed_margin_contribution": 0.9185277223587036
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 3.970291913552122,
+        "signed_margin_contribution": 0.6734741926193237
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.780743515792329,
+        "signed_margin_contribution": 0.641204833984375
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 1.3862943611198906,
+        "signed_margin_contribution": 0.1891539990901947
+      }
+    ]
+  },
+  {
+    "hostname": "DESKTOP-ST584BE",
+    "date": "2026-03-22",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.4054651081081644,
+        "signed_margin_contribution": 1.699254035949707
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 1.6094379124341003,
+        "signed_margin_contribution": 0.9066526293754578
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 3.5553480614894135,
+        "signed_margin_contribution": 0.6739367246627808
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.953243334287785,
+        "signed_margin_contribution": 0.629450261592865
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 0.0,
+        "signed_margin_contribution": 0.19399552047252655
+      }
+    ]
+  },
+  {
+    "hostname": "DESKTOP-ST584BE",
+    "date": "2026-03-23",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.4519851237248754,
+        "signed_margin_contribution": 1.6046607494354248
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 2.0794415416798357,
+        "signed_margin_contribution": 0.9327092170715332
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.561030665896573,
+        "signed_margin_contribution": 0.7076752781867981
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9999999999999998,
+        "signed_margin_contribution": 0.2509058713912964
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 1.791759469228055,
+        "signed_margin_contribution": 0.17042498290538788
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-12",
+    "date": "2026-03-22",
+    "scenario": "CLOUD_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 4.02535169073515,
+        "signed_margin_contribution": 3.1887946128845215
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 1.0986122886681098,
+        "signed_margin_contribution": 0.845866322517395
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.655440350367647,
+        "signed_margin_contribution": 0.4019958972930908
+      },
+      {
+        "feature": "level__bytes_sent",
+        "value": 18.11887259327034,
+        "signed_margin_contribution": 0.27745649218559265
+      },
+      {
+        "feature": "if_web_network",
+        "value": 0.9990465293668949,
+        "signed_margin_contribution": 0.1436811089515686
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-12",
+    "date": "2026-03-24",
+    "scenario": "CLOUD_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 3.4339872044851463,
+        "signed_margin_contribution": 3.386223316192627
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.184148890937483,
+        "signed_margin_contribution": 0.30086201429367065
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 2.4849066497880004,
+        "signed_margin_contribution": -0.2691214680671692
+      },
+      {
+        "feature": "level__bytes_sent",
+        "value": 17.352323442317388,
+        "signed_margin_contribution": 0.21516942977905273
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.091309882077698,
+        "signed_margin_contribution": -0.17425885796546936
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-12",
+    "date": "2026-03-23",
+    "scenario": "CLOUD_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 3.6635616461296463,
+        "signed_margin_contribution": 3.3106446266174316
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 2.5649493574615367,
+        "signed_margin_contribution": -0.425288587808609
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.163314804034641,
+        "signed_margin_contribution": -0.337370365858078
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.18826412308259,
+        "signed_margin_contribution": 0.27447718381881714
+      },
+      {
+        "feature": "level__bytes_sent",
+        "value": 17.177049712111028,
+        "signed_margin_contribution": 0.1954338252544403
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-33",
+    "date": "2026-03-24",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 2.833213344056216,
+        "signed_margin_contribution": 3.657660484313965
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 0.0,
+        "signed_margin_contribution": -0.4491979479789734
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.762051382780177,
+        "signed_margin_contribution": -0.2137729823589325
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 3.828641396489095,
+        "signed_margin_contribution": -0.10771657526493073
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9771167048054918,
+        "signed_margin_contribution": 0.07018043100833893
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-33",
+    "date": "2026-03-18",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.5108256237859907,
+        "signed_margin_contribution": 1.5407098531723022
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.69035945432406,
+        "signed_margin_contribution": -0.5665314197540283
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.278521424165844,
+        "signed_margin_contribution": 0.5063244104385376
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 1.3862943611198906,
+        "signed_margin_contribution": 0.48491141200065613
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9923722349351638,
+        "signed_margin_contribution": 0.30141329765319824
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-33",
+    "date": "2026-03-26",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.6429252479023645,
+        "signed_margin_contribution": -0.436563104391098
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9895118230358502,
+        "signed_margin_contribution": -0.36120858788490295
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.1354942159291497,
+        "signed_margin_contribution": 0.33243700861930847
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.368187186350492,
+        "signed_margin_contribution": -0.30909454822540283
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.860786223465865,
+        "signed_margin_contribution": 0.2238893210887909
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5A-25",
+    "date": "2026-03-26",
+    "scenario": "CREDENTIAL_DUMP",
+    "top_features": [
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 1.6094379124341003,
+        "signed_margin_contribution": 2.3039259910583496
+      },
+      {
+        "feature": "level__failed_logons",
+        "value": 1.3862943611198906,
+        "signed_margin_contribution": 1.2809572219848633
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.772588722239781,
+        "signed_margin_contribution": -0.8947573304176331
+      },
+      {
+        "feature": "if_execution",
+        "value": 0.4879862700228832,
+        "signed_margin_contribution": 0.08761730790138245
+      },
+      {
+        "feature": "level__admin_process_count",
+        "value": 1.0986122886681098,
+        "signed_margin_contribution": -0.04098351299762726
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5A-25",
+    "date": "2026-03-18",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.4054651081081644,
+        "signed_margin_contribution": 1.641273021697998
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.7430031878094825,
+        "signed_margin_contribution": -0.5841405987739563
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.267200548541362,
+        "signed_margin_contribution": 0.514068603515625
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 1.0986122886681098,
+        "signed_margin_contribution": 0.3932473659515381
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 2.5649493574615367,
+        "signed_margin_contribution": -0.2584006190299988
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5A-25",
+    "date": "2026-03-24",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.7587719298245612,
+        "signed_margin_contribution": -0.43380671739578247
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.4339872044851463,
+        "signed_margin_contribution": 0.39858418703079224
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9980930587337911,
+        "signed_margin_contribution": -0.3492582440376282
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.476972362889683,
+        "signed_margin_contribution": -0.26539450883865356
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.765191102784844,
+        "signed_margin_contribution": 0.22234487533569336
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-18",
+    "date": "2026-03-23",
+    "scenario": "CREDENTIAL_DUMP",
+    "top_features": [
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.6390573296152584,
+        "signed_margin_contribution": 2.97975754737854
+      },
+      {
+        "feature": "level__failed_logons",
+        "value": 1.3862943611198906,
+        "signed_margin_contribution": 1.2725112438201904
+      },
+      {
+        "feature": "if_execution",
+        "value": 0.8798627002288328,
+        "signed_margin_contribution": 0.1962226778268814
+      },
+      {
+        "feature": "past7_risk_mean",
+        "value": 0.0,
+        "signed_margin_contribution": -0.052264198660850525
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.3978952727983707,
+        "signed_margin_contribution": 0.04151197150349617
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-18",
+    "date": "2026-03-24",
+    "scenario": "CREDENTIAL_DUMP",
+    "top_features": [
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.4849066497880004,
+        "signed_margin_contribution": 2.973825454711914
+      },
+      {
+        "feature": "level__failed_logons",
+        "value": 2.0794415416798357,
+        "signed_margin_contribution": 1.2515780925750732
+      },
+      {
+        "feature": "if_execution",
+        "value": 0.9294431731502673,
+        "signed_margin_contribution": 0.19845548272132874
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.302585092994046,
+        "signed_margin_contribution": 0.05664308741688728
+      },
+      {
+        "feature": "level__admin_process_count",
+        "value": 1.0986122886681098,
+        "signed_margin_contribution": -0.04798484966158867
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-18",
+    "date": "2026-03-30",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.1780538303479458,
+        "signed_margin_contribution": 0.6469626426696777
+      },
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.24642448512585818,
+        "signed_margin_contribution": -0.639153242111206
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.477336814478207,
+        "signed_margin_contribution": -0.2529417872428894
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.318119993844216,
+        "signed_margin_contribution": -0.19530275464057922
+      },
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.8903717578961645,
+        "signed_margin_contribution": -0.1549593210220337
+      }
+    ]
+  },
+  {
+    "hostname": "PHYSICS-SIR",
+    "date": "2026-03-27",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 2.833213344056216,
+        "signed_margin_contribution": 3.657660484313965
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 0.0,
+        "signed_margin_contribution": -0.4491979479789734
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.662960480135946,
+        "signed_margin_contribution": -0.21266984939575195
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 3.6888794541139363,
+        "signed_margin_contribution": -0.10771657526493073
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.6357742181540804,
+        "signed_margin_contribution": 0.06594699621200562
+      }
+    ]
+  },
+  {
+    "hostname": "PHYSICS-SIR",
+    "date": "2026-03-23",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.3104500381388253,
+        "signed_margin_contribution": -0.5344286561012268
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.5649493574615367,
+        "signed_margin_contribution": 0.2552402913570404
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.20455776256869,
+        "signed_margin_contribution": -0.24669307470321655
+      },
+      {
+        "feature": "level__failed_logons",
+        "value": 1.6094379124341003,
+        "signed_margin_contribution": -0.21593615412712097
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.680172609017068,
+        "signed_margin_contribution": 0.17582297325134277
+      }
+    ]
+  },
+  {
+    "hostname": "PHYSICS-SIR",
+    "date": "2026-03-18",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.6177059496567503,
+        "signed_margin_contribution": -0.5235223174095154
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.9444389791664403,
+        "signed_margin_contribution": 0.45784425735473633
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.135564891081739,
+        "signed_margin_contribution": -0.27606409788131714
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.501258210544727,
+        "signed_margin_contribution": 0.20059984922409058
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.3631292906178487,
+        "signed_margin_contribution": -0.15060630440711975
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-16",
+    "date": "2026-03-25",
+    "scenario": "IT_SABOTAGE",
+    "top_features": [
+      {
+        "feature": "level__file_delete_count",
+        "value": 2.8903717578961645,
+        "signed_margin_contribution": 3.839771270751953
+      },
+      {
+        "feature": "level__protected_file_touch_count",
+        "value": 0.0,
+        "signed_margin_contribution": -0.4491979479789734
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.783825182329737,
+        "signed_margin_contribution": -0.2137729823589325
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 3.8918202981106265,
+        "signed_margin_contribution": -0.10771657526493073
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.8846300533943552,
+        "signed_margin_contribution": 0.07018043100833893
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-16",
+    "date": "2026-03-30",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.5389969488939739,
+        "signed_margin_contribution": -0.439877986907959
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.995732273553991,
+        "signed_margin_contribution": 0.42428845167160034
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9923722349351638,
+        "signed_margin_contribution": -0.4073675870895386
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.202535517187923,
+        "signed_margin_contribution": -0.27982383966445923
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.572154032177765,
+        "signed_margin_contribution": 0.21859076619148254
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-16",
+    "date": "2026-03-23",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.3309496567505721,
+        "signed_margin_contribution": -0.5636207461357117
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.995732273553991,
+        "signed_margin_contribution": 0.48715877532958984
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.042632833682381,
+        "signed_margin_contribution": -0.2586161494255066
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.488937726156687,
+        "signed_margin_contribution": 0.17912232875823975
+      },
+      {
+        "feature": "level__mean_process_count",
+        "value": 4.894101477840304,
+        "signed_margin_contribution": 0.12606588006019592
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-02",
+    "date": "2026-03-30",
+    "scenario": "CREDENTIAL_DUMP",
+    "top_features": [
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.833213344056216,
+        "signed_margin_contribution": 2.923729419708252
+      },
+      {
+        "feature": "level__failed_logons",
+        "value": 2.3978952727983707,
+        "signed_margin_contribution": 1.2756149768829346
+      },
+      {
+        "feature": "if_execution",
+        "value": 0.8350495804729208,
+        "signed_margin_contribution": 0.1932666152715683
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.4849066497880004,
+        "signed_margin_contribution": -0.16868150234222412
+      },
+      {
+        "feature": "level__admin_process_count",
+        "value": 0.6931471805599453,
+        "signed_margin_contribution": 0.03643021732568741
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-02",
+    "date": "2026-03-29",
+    "scenario": "CREDENTIAL_DUMP",
+    "top_features": [
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.995732273553991,
+        "signed_margin_contribution": 2.681509017944336
+      },
+      {
+        "feature": "level__failed_logons",
+        "value": 0.6931471805599453,
+        "signed_margin_contribution": -0.7431621551513672
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 1.0986122886681098,
+        "signed_margin_contribution": 0.7401021718978882
+      },
+      {
+        "feature": "if_execution",
+        "value": 0.9923722349351638,
+        "signed_margin_contribution": 0.3012160360813141
+      },
+      {
+        "feature": "past7_risk_mean",
+        "value": 0.0,
+        "signed_margin_contribution": -0.058228522539138794
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-02",
+    "date": "2026-03-31",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.21424485125858123,
+        "signed_margin_contribution": -0.5699139833450317
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.70805020110221,
+        "signed_margin_contribution": 0.5613938570022583
+      },
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.995732273553991,
+        "signed_margin_contribution": -0.1397729367017746
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.09209164214885042,
+        "signed_margin_contribution": -0.1325371265411377
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.718498871295094,
+        "signed_margin_contribution": 0.12012312561273575
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5A-30",
+    "date": "2026-03-18",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.18232155679395465,
+        "signed_margin_contribution": 1.2704827785491943
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 1.791759469228055,
+        "signed_margin_contribution": 0.8172271251678467
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.364750756851911,
+        "signed_margin_contribution": 0.5807807445526123
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.805134968916488,
+        "signed_margin_contribution": -0.55165696144104
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 3.1354942159291497,
+        "signed_margin_contribution": -0.26499396562576294
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5A-30",
+    "date": "2026-03-31",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.5280797101449275,
+        "signed_margin_contribution": -0.5866215229034424
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9923722349351638,
+        "signed_margin_contribution": -0.3916577696800232
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.70805020110221,
+        "signed_margin_contribution": 0.3454050123691559
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.251903883165888,
+        "signed_margin_contribution": -0.2536941170692444
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.662960480135946,
+        "signed_margin_contribution": 0.1984495222568512
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5A-30",
+    "date": "2026-03-19",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.612175819984744,
+        "signed_margin_contribution": -0.4137306213378906
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.6390573296152584,
+        "signed_margin_contribution": 0.34199196100234985
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.369900982828227,
+        "signed_margin_contribution": -0.2586600184440613
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.799092654460526,
+        "signed_margin_contribution": 0.22462241351604462
+      },
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 2.0794415416798357,
+        "signed_margin_contribution": -0.13070723414421082
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL9-21",
+    "date": "2026-03-20",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.22314355131420976,
+        "signed_margin_contribution": 1.2120857238769531
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 1.6094379124341003,
+        "signed_margin_contribution": 0.6840237975120544
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.714170529909472,
+        "signed_margin_contribution": 0.6333612203598022
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.343880434126331,
+        "signed_margin_contribution": -0.5743725895881653
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 3.332204510175204,
+        "signed_margin_contribution": -0.27638450264930725
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL9-21",
+    "date": "2026-03-18",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.24785469107551472,
+        "signed_margin_contribution": -0.7519639730453491
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9914187643020589,
+        "signed_margin_contribution": -0.3728432059288025
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.5053315359323625,
+        "signed_margin_contribution": -0.19305089116096497
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.21936635065925672,
+        "signed_margin_contribution": -0.18317988514900208
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 1.791759469228055,
+        "signed_margin_contribution": -0.17622849345207214
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL9-21",
+    "date": "2026-03-31",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.4965075614664802,
+        "signed_margin_contribution": 0.5858023166656494
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.465908118654584,
+        "signed_margin_contribution": -0.2648361325263977
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.313205979041787,
+        "signed_margin_contribution": -0.1876184046268463
+      },
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.9444389791664403,
+        "signed_margin_contribution": -0.18304157257080078
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.1465280047945951,
+        "signed_margin_contribution": -0.11396968364715576
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-44",
+    "date": "2026-03-31",
+    "scenario": "CLOUD_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 2.5649493574615367,
+        "signed_margin_contribution": 3.0932908058166504
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 3.7612001156935624,
+        "signed_margin_contribution": -1.1468310356140137
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.20455776256869,
+        "signed_margin_contribution": 0.2800552546977997
+      },
+      {
+        "feature": "level__bytes_sent",
+        "value": 16.73174946876051,
+        "signed_margin_contribution": 0.13609939813613892
+      },
+      {
+        "feature": "if_web_network",
+        "value": 0.9351639969488934,
+        "signed_margin_contribution": 0.0906381830573082
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-44",
+    "date": "2026-03-25",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.26496948893974054,
+        "signed_margin_contribution": -0.7583006620407104
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.4849066497880004,
+        "signed_margin_contribution": 0.3158900737762451
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.22437207148305538,
+        "signed_margin_contribution": -0.19262437522411346
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.5053315359323625,
+        "signed_margin_contribution": -0.1450161337852478
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.762173934797756,
+        "signed_margin_contribution": 0.11594066023826599
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-44",
+    "date": "2026-03-19",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.20089626239511826,
+        "signed_margin_contribution": -0.5416327714920044
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.573680166960646,
+        "signed_margin_contribution": -0.3152289390563965
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.407171771460119,
+        "signed_margin_contribution": 0.17595916986465454
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 1.9459101490553132,
+        "signed_margin_contribution": -0.1599632203578949
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.1746621989757002,
+        "signed_margin_contribution": -0.13480818271636963
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-55",
+    "date": "2026-03-26",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.15415067985582973,
+        "signed_margin_contribution": 1.347790002822876
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 1.9459101490553132,
+        "signed_margin_contribution": 1.0049811601638794
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.131226489483141,
+        "signed_margin_contribution": 0.6686878204345703
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.718498871295094,
+        "signed_margin_contribution": 0.3145248293876648
+      },
+      {
+        "feature": "if_device_file",
+        "value": 0.9895118230358502,
+        "signed_margin_contribution": 0.22500483691692352
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-55",
+    "date": "2026-03-24",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.5263605246161616,
+        "signed_margin_contribution": 0.543828547000885
+      },
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.19303012967200606,
+        "signed_margin_contribution": -0.4628322124481201
+      },
+      {
+        "feature": "past7_risk_std",
+        "value": 0.0,
+        "signed_margin_contribution": 0.19963300228118896
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.429345628954441,
+        "signed_margin_contribution": -0.13460950553417206
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.19303012967200606,
+        "signed_margin_contribution": -0.12862609326839447
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-55",
+    "date": "2026-03-25",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__file_access_count",
+        "value": 6.025865973825314,
+        "signed_margin_contribution": -0.5358824133872986
+      },
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.0,
+        "signed_margin_contribution": 0.4099915027618408
+      },
+      {
+        "feature": "level__file_access_entropy",
+        "value": 1.766927238716555,
+        "signed_margin_contribution": -0.1350158452987671
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": -0.02757573281028658,
+        "signed_margin_contribution": 0.12445232272148132
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.1972245773362196,
+        "signed_margin_contribution": -0.06500554829835892
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-08",
+    "date": "2026-03-22",
+    "scenario": "CREDENTIAL_DUMP",
+    "top_features": [
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 1.3862943611198906,
+        "signed_margin_contribution": 1.4711878299713135
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 1.9459101490553132,
+        "signed_margin_contribution": 0.5396720170974731
+      },
+      {
+        "feature": "level__failed_logons",
+        "value": 1.0986122886681098,
+        "signed_margin_contribution": 0.3354068398475647
+      },
+      {
+        "feature": "if_execution",
+        "value": 0.0,
+        "signed_margin_contribution": -0.21110303699970245
+      },
+      {
+        "feature": "past7_risk_mean",
+        "value": 0.12092050779121717,
+        "signed_margin_contribution": 0.02567470446228981
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-08",
+    "date": "2026-03-18",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.38510678871090775,
+        "signed_margin_contribution": -0.48965367674827576
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.139884552226255,
+        "signed_margin_contribution": -0.27620869874954224
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.220590170099739,
+        "signed_margin_contribution": 0.20106241106987
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 4.204692619390966,
+        "signed_margin_contribution": 0.18985235691070557
+      },
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 2.1972245773362196,
+        "signed_margin_contribution": -0.18065354228019714
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL8-08",
+    "date": "2026-03-19",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.20733218916857366,
+        "signed_margin_contribution": -0.6797665357589722
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.1456153971886238,
+        "signed_margin_contribution": -0.1744624376296997
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.4510384535657,
+        "signed_margin_contribution": -0.1522696316242218
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.804021044733257,
+        "signed_margin_contribution": 0.13524949550628662
+      },
+      {
+        "feature": "level__mean_process_count",
+        "value": 5.249652194566756,
+        "signed_margin_contribution": 0.07008236646652222
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-14",
+    "date": "2026-03-17",
+    "scenario": "DATA_HOARDING",
+    "top_features": [
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 3.6109179126442243,
+        "signed_margin_contribution": 2.2927842140197754
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.638567789166521,
+        "signed_margin_contribution": 0.41214752197265625
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.278114659230517,
+        "signed_margin_contribution": -0.39152616262435913
+      },
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.4670575896262394,
+        "signed_margin_contribution": -0.12607643008232117
+      },
+      {
+        "feature": "level__bytes_received",
+        "value": 17.85991606629582,
+        "signed_margin_contribution": -0.09527908265590668
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-14",
+    "date": "2026-03-20",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 3.044522437723423,
+        "signed_margin_contribution": -0.4158502519130707
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 4.9344739331306915,
+        "signed_margin_contribution": 0.22842679917812347
+      },
+      {
+        "feature": "level__file_access_entropy",
+        "value": 1.5154799573417073,
+        "signed_margin_contribution": 0.20831236243247986
+      },
+      {
+        "feature": "level__mean_process_count",
+        "value": 4.992131822531696,
+        "signed_margin_contribution": 0.14819622039794922
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.09400539391958139,
+        "signed_margin_contribution": -0.13663533329963684
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL11-14",
+    "date": "2026-03-23",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.258096538021482,
+        "signed_margin_contribution": 0.6302183866500854
+      },
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.2087623951182302,
+        "signed_margin_contribution": -0.5311003923416138
+      },
+      {
+        "feature": "level__lsass_handle_request_count",
+        "value": 2.5649493574615367,
+        "signed_margin_contribution": -0.15839695930480957
+      },
+      {
+        "feature": "level__mean_process_count",
+        "value": 4.952299717083292,
+        "signed_margin_contribution": 0.14071670174598694
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.6913478822291435,
+        "signed_margin_contribution": 0.13271072506904602
+      }
+    ]
+  },
+  {
+    "hostname": "MCALAB1-05",
+    "date": "2026-03-30",
+    "scenario": "CLOUD_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 2.5649493574615367,
+        "signed_margin_contribution": 2.910006046295166
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 3.332204510175204,
+        "signed_margin_contribution": -1.1573210954666138
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.251903883165888,
+        "signed_margin_contribution": 0.312468945980072
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.278114659230517,
+        "signed_margin_contribution": 0.27834945917129517
+      },
+      {
+        "feature": "level__bytes_sent",
+        "value": 17.184279371543088,
+        "signed_margin_contribution": 0.21757633984088898
+      }
+    ]
+  },
+  {
+    "hostname": "MCALAB1-05",
+    "date": "2026-03-29",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__file_access_count",
+        "value": 2.995732273553991,
+        "signed_margin_contribution": 0.9822229146957397
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.1354942159291497,
+        "signed_margin_contribution": 0.504169225692749
+      },
+      {
+        "feature": "level__file_access_entropy",
+        "value": 1.2121600243865815,
+        "signed_margin_contribution": 0.44953012466430664
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 2.6390573296152584,
+        "signed_margin_contribution": -0.429370641708374
+      },
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.21043096872616324,
+        "signed_margin_contribution": -0.3569905161857605
+      }
+    ]
+  },
+  {
+    "hostname": "MCALAB1-05",
+    "date": "2026-03-17",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "level__http_request_count",
+        "value": 4.060443010546419,
+        "signed_margin_contribution": -0.670510470867157
+      },
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.0,
+        "signed_margin_contribution": 0.504163920879364
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 4.804021044733257,
+        "signed_margin_contribution": 0.4902796745300293
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 1.791759469228055,
+        "signed_margin_contribution": -0.16428208351135254
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": -0.01361419853982784,
+        "signed_margin_contribution": 0.11290859431028366
+      }
+    ]
+  },
+  {
+    "hostname": "DESKTOP-F768FB6",
+    "date": "2026-03-23",
+    "scenario": "CLOUD_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 2.0794415416798357,
+        "signed_margin_contribution": 1.8993754386901855
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 1.3862943611198906,
+        "signed_margin_contribution": 1.067965030670166
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.159055299214529,
+        "signed_margin_contribution": 0.2679518759250641
+      },
+      {
+        "feature": "level__bytes_sent",
+        "value": 16.092127990840222,
+        "signed_margin_contribution": 0.24922168254852295
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.768320995793772,
+        "signed_margin_contribution": -0.242151141166687
+      }
+    ]
+  },
+  {
+    "hostname": "DESKTOP-F768FB6",
+    "date": "2026-03-30",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.34029366895499596,
+        "signed_margin_contribution": -0.5169055461883545
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 3.044522437723423,
+        "signed_margin_contribution": 0.4875265657901764
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.077642243349034,
+        "signed_margin_contribution": -0.21090537309646606
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.5053315359323625,
+        "signed_margin_contribution": 0.20019522309303284
+      },
+      {
+        "feature": "level__file_delete_count",
+        "value": 2.70805020110221,
+        "signed_margin_contribution": -0.17523106932640076
+      }
+    ]
+  },
+  {
+    "hostname": "DESKTOP-F768FB6",
+    "date": "2026-03-17",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.3373855835240275,
+        "signed_margin_contribution": -0.6190258264541626
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.772588722239781,
+        "signed_margin_contribution": 0.48223644495010376
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.1092475827643655,
+        "signed_margin_contribution": -0.2825360894203186
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.4510384535657,
+        "signed_margin_contribution": 0.1721014678478241
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.2316456903127384,
+        "signed_margin_contribution": -0.14414720237255096
+      }
+    ]
+  },
+  {
+    "hostname": "DATASL-173",
+    "date": "2026-03-23",
+    "scenario": "DATA_HOARDING",
+    "top_features": [
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 3.6109179126442243,
+        "signed_margin_contribution": 2.5075550079345703
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.493753839851686,
+        "signed_margin_contribution": 0.47252020239830017
+      },
+      {
+        "feature": "level__domain_access_entropy",
+        "value": 1.4058524952947686,
+        "signed_margin_contribution": -0.06047361344099045
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.927253685157205,
+        "signed_margin_contribution": 0.054938334971666336
+      },
+      {
+        "feature": "if_web_network",
+        "value": 0.0,
+        "signed_margin_contribution": 0.05306096374988556
+      }
+    ]
+  },
+  {
+    "hostname": "DATASL-173",
+    "date": "2026-03-26",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.2211575133485888,
+        "signed_margin_contribution": -0.3900734782218933
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.198478716492308,
+        "signed_margin_contribution": -0.2865091860294342
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 6.198478716492308,
+        "signed_margin_contribution": 0.21140053868293762
+      },
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 2.1972245773362196,
+        "signed_margin_contribution": -0.1870669275522232
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 4.204692619390966,
+        "signed_margin_contribution": 0.18519607186317444
+      }
+    ]
+  },
+  {
+    "hostname": "DATASL-173",
+    "date": "2026-03-27",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.01639969488939741,
+        "signed_margin_contribution": 0.4900325536727905
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 4.48863636973214,
+        "signed_margin_contribution": -0.2862827777862549
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.365976015021851,
+        "signed_margin_contribution": -0.2230927050113678
+      },
+      {
+        "feature": "level__file_access_entropy",
+        "value": 1.76975076013186,
+        "signed_margin_contribution": -0.1258651614189148
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": -0.02230440231012313,
+        "signed_margin_contribution": 0.10852096974849701
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5-19",
+    "date": "2026-03-18",
+    "scenario": "USB_EXFILTRATION_PRECURSOR",
+    "top_features": [
+      {
+        "feature": "level__after_hours_usb_ratio",
+        "value": 0.6931471805599453,
+        "signed_margin_contribution": 1.6670358180999756
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.703188113240863,
+        "signed_margin_contribution": 0.5388693809509277
+      },
+      {
+        "feature": "level__usb_connect_count",
+        "value": 0.6931471805599453,
+        "signed_margin_contribution": -0.482614129781723
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.659482215759621,
+        "signed_margin_contribution": -0.4461687207221985
+      },
+      {
+        "feature": "level__clipboard_copy_count",
+        "value": 3.6888794541139363,
+        "signed_margin_contribution": -0.1716298758983612
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5-19",
+    "date": "2026-03-19",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.25805682684973297,
+        "signed_margin_contribution": -0.4746081531047821
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 6.226536669287466,
+        "signed_margin_contribution": -0.30300161242485046
+      },
+      {
+        "feature": "level__http_request_count",
+        "value": 5.869296913133774,
+        "signed_margin_contribution": 0.23511166870594025
+      },
+      {
+        "feature": "level__external_connection_count",
+        "value": 4.04305126783455,
+        "signed_margin_contribution": 0.19140836596488953
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": 0.1103778467908903,
+        "signed_margin_contribution": -0.09972865879535675
+      }
+    ]
+  },
+  {
+    "hostname": "SOCL5-19",
+    "date": "2026-03-25",
+    "scenario": "BENIGN",
+    "top_features": [
+      {
+        "feature": "if_weighted_risk",
+        "value": 0.0,
+        "signed_margin_contribution": 0.4416918158531189
+      },
+      {
+        "feature": "level__file_sharing_visit_count",
+        "value": 1.791759469228055,
+        "signed_margin_contribution": -0.19201093912124634
+      },
+      {
+        "feature": "level__file_access_count",
+        "value": 5.147494476813453,
+        "signed_margin_contribution": 0.16066214442253113
+      },
+      {
+        "feature": "risk_minus_past7_mean",
+        "value": -0.08030265882096543,
+        "signed_margin_contribution": 0.16017842292785645
+      },
+      {
+        "feature": "level__named_pipe_event_count",
+        "value": 2.0794415416798357,
+        "signed_margin_contribution": -0.11206565052270889
+      }
+    ]
+  }
+]

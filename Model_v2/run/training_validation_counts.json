@@ -1,0 +1,39 @@
+{
+  "training": {
+    "rows": 51840,
+    "classes": {
+      "BENIGN": 51298,
+      "USB_EXFILTRATION_PRECURSOR": 117,
+      "CREDENTIAL_DUMP": 113,
+      "DATA_HOARDING": 108,
+      "IT_SABOTAGE": 102,
+      "CLOUD_EXFILTRATION_PRECURSOR": 102
+    }
+  },
+  "original_validation": {
+    "rows": 3240,
+    "classes": {
+      "BENIGN": 3212,
+      "CREDENTIAL_DUMP": 8,
+      "USB_EXFILTRATION_PRECURSOR": 7,
+      "DATA_HOARDING": 4,
+      "HONEYTOKEN_TRIP": 3,
+      "CLOUD_EXFILTRATION_PRECURSOR": 2,
+      "KILL_CHAIN_APT": 2,
+      "IT_SABOTAGE": 2
+    }
+  },
+  "new_validation": {
+    "rows": 12960,
+    "classes": {
+      "BENIGN": 12803,
+      "DATA_HOARDING": 24,
+      "IT_SABOTAGE": 24,
+      "HONEYTOKEN_TRIP": 24,
+      "CREDENTIAL_DUMP": 23,
+      "CLOUD_EXFILTRATION_PRECURSOR": 22,
+      "USB_EXFILTRATION_PRECURSOR": 21,
+      "KILL_CHAIN_APT": 19
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "checks": {
+    "future_feature_and_prediction_invariance": true,
+    "metadata_labels_not_required": true,
+    "shuffled_row_invariance": true,
+    "no_gap_or_cross_host_windows": true,
+    "duplicate_host_day_rejected": true,
+    "saved_cli_reproduces_predictions": true,
+    "original_sources_unchanged": true,
+    "frozen_model_unchanged": true
+  },
+  "comparison": {
+    "test": {
+      "old_threat_accuracy": 0.9882716049382716,
+      "old_threat_balanced_accuracy": 0.8104575163398693,
+      "old_temporal_accuracy": 0.9882716049382716,
+      "old_temporal_balanced_accuracy": 0.7002801120448179,
+      "old_threat_ap": 0.6185423057827756,
+      "old_temporal_ap": 0.33000907024410947,
+      "new_threat": {
+        "rows": 3240,
+        "positive_rows": 27,
+        "accuracy": 0.9811728395061728,
+        "balanced_accuracy": 0.8068783068783069,
+        "pr_auc": 0.6121274954603951,
+        "roc_auc": 0.9200931401367132,
+        "precision": 0.25,
+        "recall": 0.6296296296296297,
+        "f1": 0.35789473684210527,
+        "false_positive_rate": 0.015873015873015872,
+        "confusion_matrix": [
+          [
+            3162,
+            51
+          ],
+          [
+            10,
+            17
+          ]
+        ]
+      },
+      "new_temporal": {
+        "rows": 3240,
+        "positive_rows": 27,
+        "accuracy": 0.983641975308642,
+        "balanced_accuracy": 0.8081232492997199,
+        "pr_auc": 0.6053484752029149,
+        "roc_auc": 0.9125370312734147,
+        "precision": 0.2833333333333333,
+        "recall": 0.6296296296296297,
+        "f1": 0.39080459770114945,
+        "false_positive_rate": 0.013383131030189854,
+        "confusion_matrix": [
+          [
+            3170,
+            43
+          ],
+          [
+            10,
+            17
+          ]
+        ]
+      }
+    },
+    "challenge": {
+      "old_threat_accuracy": 0.9861111111111112,
+      "old_threat_balanced_accuracy": 0.8587474927568531,
+      "old_temporal_accuracy": 0.9847020933977456,
+      "old_temporal_balanced_accuracy": 0.6976381783990637,
+      "old_threat_ap": 0.6436054712327511,
+      "old_temporal_ap": 0.3445489109041325,
+      "new_threat": {
+        "rows": 6480,
+        "positive_rows": 70,
+        "accuracy": 0.980246913580247,
+        "balanced_accuracy": 0.8557833741921106,
+        "pr_auc": 0.6624798578661923,
+        "roc_auc": 0.9402295520392244,
+        "precision": 0.31875,
+        "recall": 0.7285714285714285,
+        "f1": 0.4434782608695652,
+        "false_positive_rate": 0.017004680187207487,
+        "confusion_matrix": [
+          [
+            6301,
+            109
+          ],
+          [
+            19,
+            51
+          ]
+        ]
+      },
+      "new_temporal": {
+        "rows": 4968,
+        "positive_rows": 62,
+        "accuracy": 0.9802737520128825,
+        "balanced_accuracy": 0.8626106281972042,
+        "pr_auc": 0.6420568250836469,
+        "roc_auc": 0.934882237681312,
+        "precision": 0.359375,
+        "recall": 0.7419354838709677,
+        "f1": 0.4842105263157895,
+        "false_positive_rate": 0.016714227476559314,
+        "confusion_matrix": [
+          [
+            4824,
+            82
+          ],
+          [
+            16,
+            46
+          ]
+        ]
+      }
+    }
+  },
+  "train_gaps": {
+    "test": {
+      "threat_balanced_accuracy_train_minus_holdout": 0.1621139411837086,
+      "threat_ap_train_minus_holdout": 0.23930884356551652,
+      "temporal_balanced_accuracy_train_minus_holdout": 0.16213491719132334
+    },
+    "challenge": {
+      "threat_balanced_accuracy_train_minus_holdout": 0.11320887386990486,
+      "threat_ap_train_minus_holdout": 0.1889564811597193,
+      "temporal_balanced_accuracy_train_minus_holdout": 0.107647538293839
+    },
+    "prospective_holdout": {
+      "threat_balanced_accuracy_train_minus_holdout": 0.10192629065597558,
+      "threat_ap_train_minus_holdout": 0.14032602849746179,
+      "temporal_balanced_accuracy_train_minus_holdout": 0.11212192767449625
+    }
+  },
+  "prospective_host_bootstrap_95_intervals": {
+    "threat_balanced_accuracy": [
+      0.8279513577601588,
+      0.9043474273897314
+    ],
+    "temporal_balanced_accuracy": [
+      0.822108241831492,
+      0.8935253149286695
+    ],
+    "threat_ap": [
+      0.6189083510232111,
+      0.7825896316903963
+    ],
+    "temporal_ap": [
+      0.6141056644718564,
+      0.784465587846411
+    ]
+  },
+  "bootstrap_replicates": 300,
+  "target_check": {
+    "test": {
+      "threat_above_80": true,
+      "temporal_above_80": true,
+      "host15_above_80": false
+    },
+    "challenge": {
+      "threat_above_80": true,
+      "temporal_above_80": true,
+      "host15_above_80": true
+    },
+    "prospective_holdout": {
+      "threat_above_80": true,
+      "temporal_above_80": true,
+      "host15_above_80": true
+    }
+  },
+  "interval_scope": "Within one shared-mechanism synthetic cohort, not external validity."
+}

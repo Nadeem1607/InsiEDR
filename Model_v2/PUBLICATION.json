@@ -1,0 +1,14 @@
+{
+  "branch": "Model",
+  "base_commit": "ea51e70af10084308aeab729f982ea805e699e2c",
+  "published_at": "2026-10-20T15:58:23.549595+00:00",
+  "model_sha256": "c9113a4c85fcd5726171acb5cd8d87105032c952492f1fde249dcea3ddace63a",
+  "weights_changed": false,
+  "changes": [
+    "Portable relative data paths and bundled reviewed daily inputs",
+    "Top-K inference review queue export",
+    "Top-K evaluation for K=5,10,15,20,30",
+    "README architecture diagram and complete evaluation details"
+  ],
+  "review_semantics": "Candidates for investigation; not confirmed insiders. No model/threshold retraining during publication."
+}

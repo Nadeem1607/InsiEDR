@@ -1,0 +1,92 @@
+[
+  {
+    "spec": {
+      "name": "level_d2_cap5",
+      "rep": "level",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    "train_ap": 0.8701122018487294,
+    "original_val_ap": 0.519238149384641,
+    "new_val_ap": 0.6909793237857621,
+    "grouped_forward_ap": 0.7373281241530579,
+    "selection_score": 0.6377657637876826
+  },
+  {
+    "spec": {
+      "name": "level_d3_cap5",
+      "rep": "level",
+      "depth": 3,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    "train_ap": 0.9007463729906559,
+    "original_val_ap": 0.5485052779767112,
+    "new_val_ap": 0.7110066977597489,
+    "grouped_forward_ap": 0.7497257089560546,
+    "selection_score": 0.6568339582204539
+  },
+  {
+    "spec": {
+      "name": "hybrid_d2_cap5",
+      "rep": "hybrid",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    "train_ap": 0.79697692816445,
+    "original_val_ap": 0.39864914941408186,
+    "new_val_ap": 0.6248595396974809,
+    "grouped_forward_ap": 0.6721871502328329,
+    "selection_score": 0.5563493474531374
+  },
+  {
+    "spec": {
+      "name": "hybrid_d3_cap5",
+      "rep": "hybrid",
+      "depth": 3,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    "train_ap": 0.8382083103075151,
+    "original_val_ap": 0.4014286564317287,
+    "new_val_ap": 0.6348803004934431,
+    "grouped_forward_ap": 0.6683459110612698,
+    "selection_score": 0.5562249699922609
+  },
+  {
+    "spec": {
+      "name": "level_d2_cap20",
+      "rep": "level",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 20
+    },
+    "train_ap": 0.883312191913385,
+    "original_val_ap": 0.557555768936801,
+    "new_val_ap": 0.6813072449023644,
+    "grouped_forward_ap": 0.7374099426288147,
+    "selection_score": 0.6436172516158509
+  },
+  {
+    "spec": {
+      "name": "context_d2_cap5",
+      "rep": "context",
+      "depth": 2,
+      "trees": 240,
+      "child": 40,
+      "weight_cap": 5
+    },
+    "train_ap": 0.6602689631745776,
+    "original_val_ap": 0.2993402616287952,
+    "new_val_ap": 0.5402972296227375,
+    "grouped_forward_ap": 0.5095956646698371,
+    "selection_score": 0.44526741813585563
+  }
+]

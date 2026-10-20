@@ -1,709 +1,125 @@
-# Stateless Insider Threat Detection Inference Engine
+# InsiEDR V2 — Ranked Insider-Threat Investigation Model
 
-## Overview
+The `Model` branch publishes the trained V2 pipeline, frozen weights, runnable inference and training code, daily synthetic datasets, and full evaluation evidence. Older implementations remain in their original folders/branches.
 
-This module implements a stateless insider threat detection platform composed of three specialized machine learning models:
+**Output is a Top-K list of hosts to investigate, not confirmed insiders.** A score does not establish intent, identity or misconduct. The inference queue explicitly records `review_status=review_candidate` and `insider_confirmation=not_assessed`.
 
-1. **Domain Isolation Forests** — Current anomaly detection
-2. **XGBoost Scenario Classifier** — Insider scenario classification
-3. **RedRVFL Behavioral Model** — Long-term behavioral drift detection
+## Architecture
 
-Each model serves a distinct purpose within the detection pipeline.
-
-The system maintains no server-side state. All historical context required for temporal analysis must be supplied by the caller.
-
----
-
-# Architecture
-
-```text
-Raw Daily Features
-        │
-        ▼
-Isolation Forest
-        │
-        ├── logon_risk
-        ├── file_risk
-        ├── device_risk
-        ├── http_risk
-        └── overall_risk
-                │
-                ▼
-        XGBoost Scenario Model
-                │
-                ├── rf_normal_prob
-                ├── rf_s1_prob
-                ├── rf_s2_prob
-                └── rf_s3_prob
-                        │
-                        ▼
-                RedRVFL
-                        │
-                        ▼
-                Behavioral Risk
+```mermaid
+flowchart TD
+    A[40 numeric daily behavioral features] --> B[Four domain Isolation Forests]
+    B --> C[Train-only normal-host upper-tail calibration]
+    C --> D[Exactly 40 ordered inputs: 32 behavior + 8 risk/context]
+    D --> E[Two regularized XGBoost models: six probabilities]
+    E --> F[Threat risk = 1 minus P normal]
+    C --> G[Fusion: 0.85 threat + 0.15 weighted IF risk]
+    F --> G
+    G --> H[Seven consecutive daily risks]
+    H --> I[RedRVFL: frozen random LSTM + skip + Ridge ensemble]
+    I --> J[Upward error: max actual risk minus forecast, 0]
+    J --> K[Latest 15 eligible daily errors per host]
+    K --> L[Score = max error times mean error times sqrt count]
+    L --> M[Top-K investigation queue]
+    M --> P[Analyst review: confirmation not assessed]
+    D -. same exact input rows .-> N[Native exact TreeSHAP per booster]
+    E -. signed class margins .-> N
+    L -. top 20 test hosts and 3 largest-error dates .-> N
+    N --> O[CSV + JSON + readable evidence]
 ```
 
----
+The four domains are identity, device/file, web/network and execution. Forest fitting and empirical normal calibration use disjoint training hosts. Dates/hostnames establish grouping and continuity only; they never enter estimator matrices. The feature list, weights, domain partition and error direction instantiate details unspecified by the architecture image. V2 retains its overall flow while adding a two-booster ensemble, upward error and fixed-duration ranking. No live dashboard is included.
 
-# Model Components
+## Quick start
 
-## 1. Domain Isolation Forest
+Tested with Python 3.12.3 and the pinned CPU environment in `Model_v2/requirements.txt`. Load only the trusted model artifact included in this branch.
 
-The Isolation Forest system evaluates current behavioral anomalies across four domains:
+```powershell
+git clone --branch Model https://github.com/Nadeem1607/InsiEDR.git
+cd InsiEDR
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r Model_v2/requirements.txt
 
-* Logon Activity
-* File Activity
-* Device Activity
-* HTTP Activity
-
-Each domain is evaluated independently using a dedicated Isolation Forest model.
-
-The final anomaly score is computed as:
-
-```text
-overall_risk
-
-=
-
-mean(
-    logon_risk,
-    file_risk,
-    device_risk,
-    http_risk
-)
+python Model_v2/predict.py --features Model_v2/run/prospective_holdout_inputs/X.csv --metadata Model_v2/run/prospective_holdout_inputs/metadata.csv --output Model_v2/inference_check --top-k 20
 ```
 
-### Purpose
+Outputs are `daily_predictions.csv`, `host_ranking_last15.csv`, and **`top_k_review_queue.csv`**. Change `--top-k` to 5, 10, 15, 20 or 30, or another positive review budget. Top-K includes the highest-ranked eligible hosts irrespective of the separate binary alert threshold.
 
-* Near real-time anomaly detection
-* Endpoint risk assessment
-* Current behavioral monitoring
+Use the ordered [40-column schema](Model_v2/run/schema.json) and aligned metadata with `hostname,date`; labels are unnecessary for inference. Supply continuous prior daily history. Seven days precede the first forecast, and operational host ranking requires 15 eligible forecast days. Insufficient-history hosts do not enter the queue. Raw timestamps/IDs/labels are not numerical model inputs.
 
----
+## Training and data
 
-## 2. XGBoost Scenario Classifier
+All records are **synthetic research data**, not independently observed insider attacks. Reviewed daily fitting/evaluation inputs are included under `Model_v2/data/`; new validation/holdout inputs are under `Model_v2/run/`.
 
-The XGBoost model performs supervised insider scenario classification.
+| Role | Population | Rows |
+|---|---|---:|
+| Fitting | Original first 60 days + three training-only synthetic cohorts | 51,840 |
+| Original validation | Days 61–75 | 3,240 |
+| Additional validation | Seed 63001, all seven attack families | 12,960 |
+| Historical test | Days 76–90 | 3,240 |
+| Historical challenge | Separate 30 days | 6,480 |
+| Prospective synthetic check | Seed 63002, generated after model/threshold freeze | 12,960 |
 
-Supported classes:
+No evaluation rows enter fitting. Raw simulated/harmonized copies are not stacked as independent examples. Synthetic normal labels do not establish that observed real telemetry is benign.
 
-```text
-normal
+Six classifier outputs: `BENIGN`, `CLOUD_EXFILTRATION_PRECURSOR`, `CREDENTIAL_DUMP`, `DATA_HOARDING`, `IT_SABOTAGE`, `USB_EXFILTRATION_PRECURSOR`. `HONEYTOKEN_TRIP` and `KILL_CHAIN_APT` are unseen supervised classes, evaluated as attacks. Detection and correct scenario identification are separate measures.
 
-s1
+Candidate selection checks a held-out training cohort on later dates and both validation populations. The selected depth-3 / 240-tree XGBoost specification is fitted with two fixed seeds. RedRVFL trains only on **15,857 all-normal eight-day windows of forward-cross-fitted scores**, without joining gaps or attack days. Random LSTM layers stay frozen; Ridge heads train. Selected fusion is `.85 * threat + .15 * IF`, Ridge alpha 1000, and upward error `max(actual - forecast, 0)`. Thresholds optimize worst-cohort validation balanced accuracy with <=3% normal FPR in each validation population.
 
-s2
+## Daily temporal detection
 
-s3
+Balanced accuracy averages attack recall and normal specificity. Ordinary accuracy alone is misleading when almost all days are normal. Temporal metrics exclude seven-day warm-up periods.
+
+| Evaluation | Eligible days | Accuracy | Balanced accuracy | Attack recall | Precision | Normal FPR | PR-AUC |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Test | 3,240 | 98.36% | 80.81% | 62.96% | 28.33% | 1.34% | 0.6053 |
+| Challenge | 4,968 | 98.03% | 86.26% | 74.19% | 35.94% | 1.67% | 0.6421 |
+| New synthetic holdout | 11,448 | 98.31% | 85.81% | 72.96% | 43.61% | 1.33% | 0.7077 |
+
+On identical historical inputs, temporal PR-AUC improved **0.3300 → 0.6053** on test and **0.3445 → 0.6421** on challenge. Tier 2 test AP slightly declined **.6185 → .6121**; improvement is not uniform across all metrics. New-holdout temporal balanced accuracy has a whole-host bootstrap 95% interval of **82.21–89.35%**, conditional on these shared synthetic mechanisms.
+
+## Top-K investigation performance
+
+Primary rankings use the latest **15 eligible target days per host**, with 216 eligible hosts in each population. Attack-host denominators refer to those same target dates: 9 test, 13 challenge, 18 new-holdout hosts. They do not count attacks anywhere in the full 30/60-day history.
+
+| K | Test found / 9 | Test precision / recall | Challenge found / 13 | Challenge precision / recall | Holdout found / 18 | Holdout precision / recall |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 3 | 60.0% / 33.3% | 4 | 80.0% / 30.8% | 4 | 80.0% / 22.2% |
+| 10 | 5 | 50.0% / 55.6% | 8 | 80.0% / 61.5% | 8 | 80.0% / 44.4% |
+| 15 | 6 | 40.0% / 66.7% | 9 | 60.0% / 69.2% | 13 | 86.7% / 72.2% |
+| 20 | 6 | 30.0% / 66.7% | 11 | 55.0% / 84.6% | 16 | 80.0% / 88.9% |
+| 30 | 6 | 20.0% / 66.7% | 11 | 36.7% / 84.6% | 17 | 56.7% / 94.4% |
+
+Precision@K is the fraction of reviewed hosts with simulated attacks; Recall@K is the fraction of attack hosts entering the queue. Larger K increases workload and may add no attack hosts. K values are displayed as requested; no preferred K was selected from test outcomes.
+
+[Complete Top-K report](Model_v2/run/TOP_K_EVALUATION.md) · [CSV](Model_v2/run/top_k_evaluation.csv) · [JSON](Model_v2/run/top_k_evaluation.json). These also include normal-host review counts, F1, review fractions and supplementary full-period results with clearly different exposure/denominators.
+
+## Limitations
+
+- This is a research baseline, **not a verified production insider detector**. Daily >80% balanced accuracy does not mean >80% of insiders are found. Fixed-threshold test host detection is 5/9, with 76.3% balanced accuracy; Top-K is a separate review-budget decision.
+- Test precision is low and training-to-evaluation gaps remain. No claim of being overfitting-free or memorization-free is made.
+- Test data-hoarding, honeytoken and kill-chain attack days have zero thresholded detection. New-holdout temporal honeytoken detection is only 8.3%. Unfamiliar behavior remains a major weakness.
+- Historical test/challenge/old-fresh results were inspected in earlier development. Seed 63002 was generated after this run's freeze but shares generator mechanisms; it is not external real-world validation.
+- Errors become available after the target day is observed. The model does not promise to forecast attack labels a day ahead or establish malicious intent.
+- TreeSHAP explains signed per-booster class margins. Their average does not add to the logit of the ensemble's averaged probability or explain the downstream error score.
+
+## Reproduce and inspect
+
+```powershell
+python Model_v2/evaluate_topk.py
+python Model_v2/audit_report.py
+python Model_v2/train.py --run-dir Model_v2/run_retrained
 ```
 
-The classifier produces class probabilities:
-
-```text
-rf_normal_prob
-
-rf_s1_prob
-
-rf_s2_prob
-
-rf_s3_prob
-```
-
-### Purpose
-
-* Insider scenario classification
-* Scenario-specific risk assessment
-* Analyst triage support
-
-### Required Inputs
-
-The model expects:
-
-```text
-Raw behavioral features
-
-+
-
-logon_risk
-file_risk
-device_risk
-http_risk
-overall_risk
-
-+
-
-daily_risk_delta
-daily_risk_rolling_mean_7d
-daily_risk_rolling_std_7d
-```
-
-Historical risk statistics must be supplied by the caller.
-
-The inference service does not maintain historical state.
-
----
-
-## 3. RedRVFL Behavioral Drift Model
-
-The RedRVFL model evaluates long-term behavioral deviations.
-
-The model operates on a single fused risk signal derived from the outputs of the Isolation Forest and XGBoost models.
-
-Scenario risk is calculated as:
-
-```text
-scenario_risk
-
-=
-
-max(
-    rf_s1_prob,
-    rf_s2_prob,
-    rf_s3_prob
-)
-```
-
-The final behavioral signal is:
-
-```text
-rvfl_risk
-
-=
-
-0.3 × overall_risk
-
-+
-
-0.7 × scenario_risk
-```
-
-The model predicts the next day's expected risk value.
-
-Behavioral deviation is measured using:
-
-```text
-Mean Squared Error (MSE)
-
-between
-
-Actual rvfl_risk
-
-and
-
-Predicted rvfl_risk
-```
-
-Higher error indicates stronger behavioral drift.
-
-### Purpose
-
-* Long-term behavioral monitoring
-* Behavioral change detection
-* Insider threat identification
-
----
-
-# Persisted Model Artifacts
-
-The inference engine requires the following files:
-
-```text
-models/
-
-domain_isolation_forest.pkl
-
-scenario_xgb.pkl
-
-scenario_xgb_features.json
-
-ridge_models.pkl
-
-rvfl_metadata.json
-
-feature_columns_IF.json
-
-feature_columns.json
-```
-
-All artifacts must exist before initialization.
-
----
-
-# API 1 — Current Risk Assessment
-
-## Import
-
-```python
-from src.server.inference import (
-    predict_current_risk
-)
-```
-
----
-
-## Input Format
-
-```json
-{
-  "features": {
-
-    "... all required IF features ..."
-
-  }
-}
-```
-
-### Requirements
-
-The feature dictionary must contain all features listed in:
-
-```text
-models/feature_columns_IF.json
-```
-
-Missing features raise:
-
-```python
-ValueError
-```
-
----
-
-## Example
-
-```python
-from src.server.inference import (
-    predict_current_risk
-)
-
-payload = {
-
-    "features": {
-
-        "logon_count": 12,
-        "logoff_count": 12
-
-    }
-
-}
-
-result = predict_current_risk(
-    payload
-)
-```
-
----
-
-## Response Format
-
-```json
-{
-  "detector": "isolation_forest",
-
-  "overall_score": 0.61,
-
-  "risk_level": "MEDIUM",
-
-  "domain_scores": {
-
-      "logon": 0.72,
-
-      "file": 0.58,
-
-      "device": 0.49,
-
-      "http": 0.67
-
-  }
-}
-```
-
----
-
-## Current Risk Thresholds
-
-```text
-overall_score >= 0.80
-    HIGH
-
-overall_score >= 0.50
-    MEDIUM
-
-otherwise
-    LOW
-```
-
----
-
-# API 2 — Scenario Classification
-
-## Import
-
-```python
-from src.server.inference import (
-    predict_scenario
-)
-```
-
----
-
-## Input Format
-
-```json
-{
-  "features": {
-
-      "... raw features ...",
-
-      "logon_risk": 0.71,
-
-      "file_risk": 0.52,
-
-      "device_risk": 0.44,
-
-      "http_risk": 0.61,
-
-      "overall_risk": 0.57,
-
-      "daily_risk_delta": 0.08,
-
-      "daily_risk_rolling_mean_7d": 0.49,
-
-      "daily_risk_rolling_std_7d": 0.12
-
-  }
-}
-```
-
-### Requirements
-
-The feature dictionary must contain all features listed in:
-
-```text
-models/scenario_xgb_features.json
-```
-
-Missing features raise:
-
-```python
-ValueError
-```
-
----
-
-## Example
-
-```python
-from src.server.inference import (
-    predict_scenario
-)
-
-payload = {
-
-    "features": {
-        ...
-    }
-
-}
-
-result = predict_scenario(
-    payload
-)
-```
-
----
-
-## Response Format
-
-```json
-{
-  "scenario": "s1",
-
-  "confidence": 0.91,
-
-  "rf_normal_prob": 0.03,
-
-  "rf_s1_prob": 0.91,
-
-  "rf_s2_prob": 0.04,
-
-  "rf_s3_prob": 0.02
-}
-```
-
----
-
-# API 3 — Behavioral Risk Assessment
-
-## Import
-
-```python
-from src.server.inference import (
-    predict_behavioral_risk
-)
-```
-
----
-
-## Sequence Requirements
-
-Current model configuration:
-
-```text
-sequence_length = 7
-```
-
-Required sequence:
-
-```text
-7 historical observations
-
-+
-
-1 target observation
-
-=
-
-8 total observations
-```
-
----
-
-## Input Format
-
-```json
-{
-  "payload_id": "123",
-
-  "username": "RKD0604",
-
-  "hostname": "PC001",
-
-  "daily_sequence": [
-
-      {
-          "overall_risk": 0.42,
-
-          "rf_s1_prob": 0.02,
-
-          "rf_s2_prob": 0.01,
-
-          "rf_s3_prob": 0.88
-      }
-
-  ]
-}
-```
-
-### Requirements
-
-Each daily record must contain:
-
-```text
-overall_risk
-
-rf_s1_prob
-
-rf_s2_prob
-
-rf_s3_prob
-```
-
-Missing features raise:
-
-```python
-ValueError
-```
-
----
-
-## Example
-
-```python
-from src.server.inference import (
-    predict_behavioral_risk
-)
-
-payload = {
-
-    "payload_id": "123",
-
-    "username": "RKD0604",
-
-    "hostname": "PC001",
-
-    "daily_sequence": [
-        ...
-    ]
-
-}
-
-result = predict_behavioral_risk(
-    payload
-)
-```
-
----
-
-## Response Format
-
-```json
-{
-  "payload_id": "123",
-
-  "username": "RKD0604",
-
-  "hostname": "PC001",
-
-  "rvfl_error": 0.067,
-
-  "behavioral_risk": "HIGH",
-
-  "predicted_scenario": {
-
-      "scenario": "s3",
-
-      "confidence": 0.88
-
-  },
-
-  "sequence_length_received": 8,
-
-  "sequence_length_expected": 7,
-
-  "model_versions": {
-
-      "rvfl_model": "v1",
-
-      "scenario_model": "external"
-
-  },
-
-  "recommended_action":
-      "Escalate for analyst review."
-}
-```
-
----
-
-## Behavioral Risk Thresholds
-
-```text
-rvfl_error >= 0.05
-    HIGH
-
-rvfl_error >= 0.02
-    MEDIUM
-
-otherwise
-    LOW
-```
-
----
-
-# Stateless Deployment Design
-
-The inference engine maintains no user history.
-
-The client system is responsible for:
-
-```text
-Daily feature collection
-
-Historical storage
-
-Risk trend computation
-
-Rolling window maintenance
-
-Sequence generation
-```
-
-The inference service is responsible for:
-
-```text
-Current anomaly scoring
-
-Scenario classification
-
-Behavioral drift detection
-```
-
-Recommended deployment architecture:
-
-```text
-Endpoint Agent
-    │
-    ├── Collect daily features
-    │
-    ├── Maintain historical state
-    │
-    ├── Compute risk trend features
-    │
-    └── Submit inference requests
-            │
-            ▼
-
-Stateless Inference Engine
-            │
-            ├── Current Risk
-            │
-            ├── Scenario Classification
-            │
-            └── Behavioral Risk
-```
-
----
-
-# Thread Safety
-
-The inference engine is read-only after initialization.
-
-All models are loaded once during startup.
-
-Inference requests:
-
-* Do not modify model state
-* Do not update model weights
-* Do not persist user information
-
-Suitable for:
-
-* FastAPI
-* Flask
-* gRPC
-* Multi-threaded deployments
-* Multi-process deployments
-
----
-
-# Current Production Status
-
-Implemented and validated:
-
-```text
-✓ Domain Isolation Forest
-
-✓ XGBoost Scenario Classification
-
-✓ RedRVFL Behavioral Drift Detection
-
-✓ End-to-End Integration
-
-✓ Stateless Deployment
-```
-
----
-
-# Future Roadmap
-
-Planned enhancements:
-
-* Analyst Investigation Reports
-* Risk Visualization Dashboards
-* Confidence Calibration
-* Streaming Evaluation Pipelines
-* Top-K Insider Tracking
-* Temporal Scenario Analytics
-* Explainability Enhancements
-* Multi-Tenant Deployment Support
+Training preserves the committed frozen run. Reusing published seeds reproduces a historical synthetic experiment, not a new unseen benchmark. Future tuning needs an independent holdout. The audit retains committed earlier-model comparison measurements when the earlier model's separate prediction files are unavailable.
+
+- [Full training report](Model_v2/run/TRAINING_REPORT.md)
+- [Detailed metrics and scenario outcomes](Model_v2/run/evaluation.json)
+- [Protocol](Model_v2/run/protocol.json) and [timestamped decisions](Model_v2/run/decisions.jsonl)
+- [Change log](Model_v2/CHANGELOG.md)
+- [Frozen selection](Model_v2/run/frozen_selection.json) and [audit evidence](Model_v2/run/post_freeze_audit.json)
+- [Readable explanation findings](Model_v2/run/explanation_findings.md)
+- [Exact selected explanation inputs](Model_v2/run/selected_explanation_inputs.csv)
+
+Weights: [`Model_v2/run/pipeline.joblib`](Model_v2/run/pipeline.joblib). SHA256: `c9113a4c85fcd5726171acb5cd8d87105032c952492f1fde249dcea3ddace63a`. Publication makes input paths portable and adds a Top-K export; weights and thresholds remain unchanged. `InsiEDR_Harmonized_Pipeline/` remains the original reference implementation.

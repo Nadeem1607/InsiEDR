@@ -1,0 +1,4 @@
+# Keep published artifact/input bytes stable across Windows and Unix clones.
+Model_v2/** -text whitespace=cr-at-eol
+README.md text eol=lf
+docs/*.mmd text eol=lf

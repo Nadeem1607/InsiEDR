@@ -1,0 +1,934 @@
+{
+  "train_original": {
+    "threat": {
+      "rows": 12960,
+      "positive_rows": 60,
+      "accuracy": 0.9878086419753086,
+      "balanced_accuracy": 0.9689922480620154,
+      "pr_auc": 0.8514363390259116,
+      "roc_auc": 0.9982067183462532,
+      "precision": 0.2688679245283019,
+      "recall": 0.95,
+      "f1": 0.41911764705882354,
+      "false_positive_rate": 0.012015503875968992,
+      "confusion_matrix": [
+        [
+          12745,
+          155
+        ],
+        [
+          3,
+          57
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 11448,
+      "positive_rows": 60,
+      "accuracy": 0.9903039832285115,
+      "balanced_accuracy": 0.9702581664910432,
+      "pr_auc": 0.7998766859177113,
+      "roc_auc": 0.9975032197634938,
+      "precision": 0.34545454545454546,
+      "recall": 0.95,
+      "f1": 0.5066666666666667,
+      "false_positive_rate": 0.009483667017913594,
+      "confusion_matrix": [
+        [
+          11280,
+          108
+        ],
+        [
+          3,
+          57
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 216,
+      "positive_rows": 4,
+      "accuracy": 0.9861111111111112,
+      "balanced_accuracy": 0.9929245283018868,
+      "pr_auc": 0.6791666666666667,
+      "roc_auc": 0.9952830188679245,
+      "precision": 0.5714285714285714,
+      "recall": 1.0,
+      "f1": 0.7272727272727273,
+      "false_positive_rate": 0.014150943396226415,
+      "confusion_matrix": [
+        [
+          209,
+          3
+        ],
+        [
+          0,
+          4
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.6815551261834312,
+    "known_class_macro_f1": 0.643838436991678,
+    "unavailable_temporal_rows": 1512,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 12900,
+        "supervised_known": true,
+        "threat_alert_rate": 0.012015503875968992,
+        "temporal_alert_rate": 0.009483667017913594
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 10,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9,
+        "temporal_alert_rate": 0.9
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 12,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "DATA_HOARDING": {
+        "rows": 9,
+        "supervised_known": true,
+        "threat_alert_rate": 0.7777777777777778,
+        "temporal_alert_rate": 0.7777777777777778
+      },
+      "IT_SABOTAGE": {
+        "rows": 15,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 14,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      }
+    }
+  },
+  "train_augmented": {
+    "threat": {
+      "rows": 51840,
+      "positive_rows": 542,
+      "accuracy": 0.9881365740740741,
+      "balanced_accuracy": 0.960233410767185,
+      "pr_auc": 0.9014826285664505,
+      "roc_auc": 0.9938743538766824,
+      "precision": 0.4662973222530009,
+      "recall": 0.9317343173431735,
+      "f1": 0.6215384615384615,
+      "false_positive_rate": 0.011267495808803462,
+      "confusion_matrix": [
+        [
+          50720,
+          578
+        ],
+        [
+          37,
+          505
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 45792,
+      "positive_rows": 542,
+      "accuracy": 0.9893867924528302,
+      "balanced_accuracy": 0.9563485351980592,
+      "pr_auc": 0.8873693808703573,
+      "roc_auc": 0.9904606633911643,
+      "precision": 0.5296610169491526,
+      "recall": 0.922509225092251,
+      "f1": 0.6729475100942126,
+      "false_positive_rate": 0.009812154696132596,
+      "confusion_matrix": [
+        [
+          44806,
+          444
+        ],
+        [
+          42,
+          500
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 864,
+      "positive_rows": 58,
+      "accuracy": 0.9907407407407407,
+      "balanced_accuracy": 0.9630358518011466,
+      "pr_auc": 0.9151928763413769,
+      "roc_auc": 0.9962779156327545,
+      "precision": 0.9310344827586207,
+      "recall": 0.9310344827586207,
+      "f1": 0.9310344827586207,
+      "false_positive_rate": 0.004962779156327543,
+      "confusion_matrix": [
+        [
+          802,
+          4
+        ],
+        [
+          4,
+          54
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.9196559482699493,
+    "known_class_macro_f1": 0.7881097239530998,
+    "unavailable_temporal_rows": 6048,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 51298,
+        "supervised_known": true,
+        "threat_alert_rate": 0.011267495808803462,
+        "temporal_alert_rate": 0.009812154696132596
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 102,
+        "supervised_known": true,
+        "threat_alert_rate": 0.8823529411764706,
+        "temporal_alert_rate": 0.8627450980392157
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 113,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9911504424778761,
+        "temporal_alert_rate": 0.9734513274336283
+      },
+      "DATA_HOARDING": {
+        "rows": 108,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9166666666666666,
+        "temporal_alert_rate": 0.9166666666666666
+      },
+      "IT_SABOTAGE": {
+        "rows": 102,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9803921568627451,
+        "temporal_alert_rate": 0.9803921568627451
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 117,
+        "supervised_known": true,
+        "threat_alert_rate": 0.8888888888888888,
+        "temporal_alert_rate": 0.8803418803418803
+      }
+    }
+  },
+  "validation_original": {
+    "threat": {
+      "rows": 3240,
+      "positive_rows": 28,
+      "accuracy": 0.979320987654321,
+      "balanced_accuracy": 0.8479585483010141,
+      "pr_auc": 0.5641607813907158,
+      "roc_auc": 0.9567359010852162,
+      "precision": 0.25316455696202533,
+      "recall": 0.7142857142857143,
+      "f1": 0.37383177570093457,
+      "false_positive_rate": 0.018368617683686177,
+      "confusion_matrix": [
+        [
+          3153,
+          59
+        ],
+        [
+          8,
+          20
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 3240,
+      "positive_rows": 28,
+      "accuracy": 0.9817901234567902,
+      "balanced_accuracy": 0.8492038783134674,
+      "pr_auc": 0.4927120048160799,
+      "roc_auc": 0.9338307240704502,
+      "precision": 0.28169014084507044,
+      "recall": 0.7142857142857143,
+      "f1": 0.40404040404040403,
+      "false_positive_rate": 0.015877957658779578,
+      "confusion_matrix": [
+        [
+          3161,
+          51
+        ],
+        [
+          8,
+          20
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 216,
+      "positive_rows": 9,
+      "accuracy": 0.9675925925925926,
+      "balanced_accuracy": 0.8236714975845411,
+      "pr_auc": 0.43429849877218296,
+      "roc_auc": 0.9307568438003221,
+      "precision": 0.6,
+      "recall": 0.6666666666666666,
+      "f1": 0.631578947368421,
+      "false_positive_rate": 0.01932367149758454,
+      "confusion_matrix": [
+        [
+          203,
+          4
+        ],
+        [
+          3,
+          6
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.43429849877218296,
+    "known_class_macro_f1": 0.5364766876430206,
+    "unavailable_temporal_rows": 0,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 3212,
+        "supervised_known": true,
+        "threat_alert_rate": 0.018368617683686177,
+        "temporal_alert_rate": 0.015877957658779578
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 2,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 8,
+        "supervised_known": true,
+        "threat_alert_rate": 0.875,
+        "temporal_alert_rate": 0.875
+      },
+      "DATA_HOARDING": {
+        "rows": 4,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "HONEYTOKEN_TRIP": {
+        "rows": 3,
+        "supervised_known": false,
+        "threat_alert_rate": 0.0,
+        "temporal_alert_rate": 0.0
+      },
+      "IT_SABOTAGE": {
+        "rows": 2,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "KILL_CHAIN_APT": {
+        "rows": 2,
+        "supervised_known": false,
+        "threat_alert_rate": 0.5,
+        "temporal_alert_rate": 0.5
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 7,
+        "supervised_known": true,
+        "threat_alert_rate": 0.5714285714285714,
+        "temporal_alert_rate": 0.5714285714285714
+      }
+    }
+  },
+  "validation_new": {
+    "threat": {
+      "rows": 12960,
+      "positive_rows": 157,
+      "accuracy": 0.985108024691358,
+      "balanced_accuracy": 0.8509080027521416,
+      "pr_auc": 0.712602009143773,
+      "roc_auc": 0.946466567598856,
+      "precision": 0.4307692307692308,
+      "recall": 0.7133757961783439,
+      "f1": 0.5371702637889688,
+      "false_positive_rate": 0.011559790674060768,
+      "confusion_matrix": [
+        [
+          12655,
+          148
+        ],
+        [
+          45,
+          112
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 11448,
+      "positive_rows": 157,
+      "accuracy": 0.9859364081062194,
+      "balanced_accuracy": 0.8484106331236141,
+      "pr_auc": 0.7097636847045177,
+      "roc_auc": 0.9176854120326939,
+      "precision": 0.4911504424778761,
+      "recall": 0.7070063694267515,
+      "f1": 0.5796344647519582,
+      "false_positive_rate": 0.010185103179523515,
+      "confusion_matrix": [
+        [
+          11176,
+          115
+        ],
+        [
+          46,
+          111
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 216,
+      "positive_rows": 18,
+      "accuracy": 0.9722222222222222,
+      "balanced_accuracy": 0.8333333333333333,
+      "pr_auc": 0.7921648597242246,
+      "roc_auc": 0.9026374859708193,
+      "precision": 1.0,
+      "recall": 0.6666666666666666,
+      "f1": 0.8,
+      "false_positive_rate": 0.0,
+      "confusion_matrix": [
+        [
+          198,
+          0
+        ],
+        [
+          6,
+          12
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.9944444444444445,
+    "known_class_macro_f1": 0.7142635096101176,
+    "unavailable_temporal_rows": 1512,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 12803,
+        "supervised_known": true,
+        "threat_alert_rate": 0.011559790674060768,
+        "temporal_alert_rate": 0.010185103179523515
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 22,
+        "supervised_known": true,
+        "threat_alert_rate": 0.6818181818181818,
+        "temporal_alert_rate": 0.6818181818181818
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 23,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9565217391304348,
+        "temporal_alert_rate": 0.9565217391304348
+      },
+      "DATA_HOARDING": {
+        "rows": 24,
+        "supervised_known": true,
+        "threat_alert_rate": 0.8333333333333334,
+        "temporal_alert_rate": 0.7916666666666666
+      },
+      "HONEYTOKEN_TRIP": {
+        "rows": 24,
+        "supervised_known": false,
+        "threat_alert_rate": 0.041666666666666664,
+        "temporal_alert_rate": 0.041666666666666664
+      },
+      "IT_SABOTAGE": {
+        "rows": 24,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "KILL_CHAIN_APT": {
+        "rows": 19,
+        "supervised_known": false,
+        "threat_alert_rate": 0.5263157894736842,
+        "temporal_alert_rate": 0.5263157894736842
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 21,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9523809523809523,
+        "temporal_alert_rate": 0.9523809523809523
+      }
+    }
+  },
+  "test": {
+    "threat": {
+      "rows": 3240,
+      "positive_rows": 27,
+      "accuracy": 0.9811728395061728,
+      "balanced_accuracy": 0.8068783068783069,
+      "pr_auc": 0.6121274954603951,
+      "roc_auc": 0.9200931401367132,
+      "precision": 0.25,
+      "recall": 0.6296296296296297,
+      "f1": 0.35789473684210527,
+      "false_positive_rate": 0.015873015873015872,
+      "confusion_matrix": [
+        [
+          3162,
+          51
+        ],
+        [
+          10,
+          17
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 3240,
+      "positive_rows": 27,
+      "accuracy": 0.983641975308642,
+      "balanced_accuracy": 0.8081232492997199,
+      "pr_auc": 0.6053484752029149,
+      "roc_auc": 0.9125370312734147,
+      "precision": 0.2833333333333333,
+      "recall": 0.6296296296296297,
+      "f1": 0.39080459770114945,
+      "false_positive_rate": 0.013383131030189854,
+      "confusion_matrix": [
+        [
+          3170,
+          43
+        ],
+        [
+          10,
+          17
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 216,
+      "positive_rows": 9,
+      "accuracy": 0.9537037037037037,
+      "balanced_accuracy": 0.7632850241545894,
+      "pr_auc": 0.41562669707831,
+      "roc_auc": 0.8507783145464305,
+      "precision": 0.45454545454545453,
+      "recall": 0.5555555555555556,
+      "f1": 0.5,
+      "false_positive_rate": 0.028985507246376812,
+      "confusion_matrix": [
+        [
+          201,
+          6
+        ],
+        [
+          4,
+          5
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.41562669707831,
+    "known_class_macro_f1": 0.5610685073280731,
+    "unavailable_temporal_rows": 0,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 3213,
+        "supervised_known": true,
+        "threat_alert_rate": 0.015873015873015872,
+        "temporal_alert_rate": 0.013383131030189854
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 4,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 4,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "DATA_HOARDING": {
+        "rows": 2,
+        "supervised_known": true,
+        "threat_alert_rate": 0.0,
+        "temporal_alert_rate": 0.0
+      },
+      "HONEYTOKEN_TRIP": {
+        "rows": 4,
+        "supervised_known": false,
+        "threat_alert_rate": 0.0,
+        "temporal_alert_rate": 0.0
+      },
+      "IT_SABOTAGE": {
+        "rows": 4,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "KILL_CHAIN_APT": {
+        "rows": 3,
+        "supervised_known": false,
+        "threat_alert_rate": 0.0,
+        "temporal_alert_rate": 0.0
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 6,
+        "supervised_known": true,
+        "threat_alert_rate": 0.8333333333333334,
+        "temporal_alert_rate": 0.8333333333333334
+      }
+    }
+  },
+  "challenge": {
+    "threat": {
+      "rows": 6480,
+      "positive_rows": 70,
+      "accuracy": 0.980246913580247,
+      "balanced_accuracy": 0.8557833741921106,
+      "pr_auc": 0.6624798578661923,
+      "roc_auc": 0.9402295520392244,
+      "precision": 0.31875,
+      "recall": 0.7285714285714285,
+      "f1": 0.4434782608695652,
+      "false_positive_rate": 0.017004680187207487,
+      "confusion_matrix": [
+        [
+          6301,
+          109
+        ],
+        [
+          19,
+          51
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 4968,
+      "positive_rows": 62,
+      "accuracy": 0.9802737520128825,
+      "balanced_accuracy": 0.8626106281972042,
+      "pr_auc": 0.6420568250836469,
+      "roc_auc": 0.934882237681312,
+      "precision": 0.359375,
+      "recall": 0.7419354838709677,
+      "f1": 0.4842105263157895,
+      "false_positive_rate": 0.016714227476559314,
+      "confusion_matrix": [
+        [
+          4824,
+          82
+        ],
+        [
+          16,
+          46
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 216,
+      "positive_rows": 13,
+      "accuracy": 0.9583333333333334,
+      "balanced_accuracy": 0.869837059492232,
+      "pr_auc": 0.6554573304573306,
+      "roc_auc": 0.9082985979537704,
+      "precision": 0.625,
+      "recall": 0.7692307692307693,
+      "f1": 0.6896551724137931,
+      "false_positive_rate": 0.029556650246305417,
+      "confusion_matrix": [
+        [
+          197,
+          6
+        ],
+        [
+          3,
+          10
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.6874853621961388,
+    "known_class_macro_f1": 0.6349954514410554,
+    "unavailable_temporal_rows": 1512,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 6410,
+        "supervised_known": true,
+        "threat_alert_rate": 0.017004680187207487,
+        "temporal_alert_rate": 0.016714227476559314
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 8,
+        "supervised_known": true,
+        "threat_alert_rate": 0.75,
+        "temporal_alert_rate": 0.75
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 9,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "DATA_HOARDING": {
+        "rows": 11,
+        "supervised_known": true,
+        "threat_alert_rate": 0.6363636363636364,
+        "temporal_alert_rate": 0.7142857142857143
+      },
+      "HONEYTOKEN_TRIP": {
+        "rows": 9,
+        "supervised_known": false,
+        "threat_alert_rate": 0.2222222222222222,
+        "temporal_alert_rate": 0.14285714285714285
+      },
+      "IT_SABOTAGE": {
+        "rows": 10,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "KILL_CHAIN_APT": {
+        "rows": 12,
+        "supervised_known": false,
+        "threat_alert_rate": 0.6666666666666666,
+        "temporal_alert_rate": 0.6666666666666666
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 11,
+        "supervised_known": true,
+        "threat_alert_rate": 0.8181818181818182,
+        "temporal_alert_rate": 0.7777777777777778
+      }
+    }
+  },
+  "old_fresh": {
+    "threat": {
+      "rows": 12960,
+      "positive_rows": 170,
+      "accuracy": 0.986574074074074,
+      "balanced_accuracy": 0.9467644759232856,
+      "pr_auc": 0.8835455297017935,
+      "roc_auc": 0.9888166306397461,
+      "precision": 0.4935897435897436,
+      "recall": 0.9058823529411765,
+      "f1": 0.6390041493775933,
+      "false_positive_rate": 0.01235340109460516,
+      "confusion_matrix": [
+        [
+          12632,
+          158
+        ],
+        [
+          16,
+          154
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 11448,
+      "positive_rows": 170,
+      "accuracy": 0.988382250174703,
+      "balanced_accuracy": 0.9419604018234355,
+      "pr_auc": 0.8782134927399364,
+      "roc_auc": 0.9830526376182678,
+      "precision": 0.5692883895131086,
+      "recall": 0.8941176470588236,
+      "f1": 0.6956521739130435,
+      "false_positive_rate": 0.010196843411952474,
+      "confusion_matrix": [
+        [
+          11163,
+          115
+        ],
+        [
+          18,
+          152
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 216,
+      "positive_rows": 18,
+      "accuracy": 0.9814814814814815,
+      "balanced_accuracy": 0.9393939393939394,
+      "pr_auc": 0.8244560767845082,
+      "roc_auc": 0.9803591470258137,
+      "precision": 0.8888888888888888,
+      "recall": 0.8888888888888888,
+      "f1": 0.8888888888888888,
+      "false_positive_rate": 0.010101010101010102,
+      "confusion_matrix": [
+        [
+          196,
+          2
+        ],
+        [
+          2,
+          16
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.8077908317459401,
+    "known_class_macro_f1": 0.7965877198043824,
+    "unavailable_temporal_rows": 1512,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 12790,
+        "supervised_known": true,
+        "threat_alert_rate": 0.01235340109460516,
+        "temporal_alert_rate": 0.010196843411952474
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 33,
+        "supervised_known": true,
+        "threat_alert_rate": 0.7878787878787878,
+        "temporal_alert_rate": 0.7575757575757576
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 37,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9459459459459459,
+        "temporal_alert_rate": 0.918918918918919
+      },
+      "DATA_HOARDING": {
+        "rows": 31,
+        "supervised_known": true,
+        "threat_alert_rate": 0.8387096774193549,
+        "temporal_alert_rate": 0.8387096774193549
+      },
+      "IT_SABOTAGE": {
+        "rows": 36,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 33,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9393939393939394,
+        "temporal_alert_rate": 0.9393939393939394
+      }
+    }
+  },
+  "prospective_holdout": {
+    "threat": {
+      "rows": 12960,
+      "positive_rows": 159,
+      "accuracy": 0.9827932098765432,
+      "balanced_accuracy": 0.8670659574060399,
+      "pr_auc": 0.7111103105284499,
+      "roc_auc": 0.9553125517414864,
+      "precision": 0.39403973509933776,
+      "recall": 0.7484276729559748,
+      "f1": 0.5162689804772235,
+      "false_positive_rate": 0.014295758143895007,
+      "confusion_matrix": [
+        [
+          12618,
+          183
+        ],
+        [
+          40,
+          119
+        ]
+      ]
+    },
+    "temporal": {
+      "rows": 11448,
+      "positive_rows": 159,
+      "accuracy": 0.9831411600279525,
+      "balanced_accuracy": 0.858136238816547,
+      "pr_auc": 0.707670060886346,
+      "roc_auc": 0.9457539509435076,
+      "precision": 0.43609022556390975,
+      "recall": 0.7295597484276729,
+      "f1": 0.5458823529411765,
+      "false_positive_rate": 0.013287270794578794,
+      "confusion_matrix": [
+        [
+          11139,
+          150
+        ],
+        [
+          43,
+          116
+        ]
+      ]
+    },
+    "host_last15": {
+      "rows": 216,
+      "positive_rows": 18,
+      "accuracy": 0.9722222222222222,
+      "balanced_accuracy": 0.8838383838383839,
+      "pr_auc": 0.7897046527376466,
+      "roc_auc": 0.9812008978675646,
+      "precision": 0.875,
+      "recall": 0.7777777777777778,
+      "f1": 0.8235294117647058,
+      "false_positive_rate": 0.010101010101010102,
+      "confusion_matrix": [
+        [
+          196,
+          2
+        ],
+        [
+          4,
+          14
+        ]
+      ]
+    },
+    "host_fullperiod_ap": 0.9041332239216656,
+    "known_class_macro_f1": 0.7048980312177225,
+    "unavailable_temporal_rows": 1512,
+    "per_scenario": {
+      "BENIGN": {
+        "rows": 12801,
+        "supervised_known": true,
+        "threat_alert_rate": 0.014295758143895007,
+        "temporal_alert_rate": 0.013287270794578794
+      },
+      "CLOUD_EXFILTRATION_PRECURSOR": {
+        "rows": 24,
+        "supervised_known": true,
+        "threat_alert_rate": 0.9583333333333334,
+        "temporal_alert_rate": 0.9583333333333334
+      },
+      "CREDENTIAL_DUMP": {
+        "rows": 20,
+        "supervised_known": true,
+        "threat_alert_rate": 0.95,
+        "temporal_alert_rate": 0.95
+      },
+      "DATA_HOARDING": {
+        "rows": 25,
+        "supervised_known": true,
+        "threat_alert_rate": 0.84,
+        "temporal_alert_rate": 0.84
+      },
+      "HONEYTOKEN_TRIP": {
+        "rows": 24,
+        "supervised_known": false,
+        "threat_alert_rate": 0.125,
+        "temporal_alert_rate": 0.08333333333333333
+      },
+      "IT_SABOTAGE": {
+        "rows": 24,
+        "supervised_known": true,
+        "threat_alert_rate": 1.0,
+        "temporal_alert_rate": 1.0
+      },
+      "KILL_CHAIN_APT": {
+        "rows": 22,
+        "supervised_known": false,
+        "threat_alert_rate": 0.5909090909090909,
+        "temporal_alert_rate": 0.5454545454545454
+      },
+      "USB_EXFILTRATION_PRECURSOR": {
+        "rows": 20,
+        "supervised_known": true,
+        "threat_alert_rate": 0.8,
+        "temporal_alert_rate": 0.75
+      }
+    }
+  }
+}
