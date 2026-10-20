@@ -1,0 +1,284 @@
+{
+  "short-term_edr_feature": {
+    "features": [
+      "auth_fail_rate_300s",
+      "auth_rate_300s",
+      "auth_rate_3600s",
+      "edr_auth_event_count_window",
+      "edr_auth_events_per_minute_window",
+      "edr_failed_auth_events_per_minute_window",
+      "edr_failed_auth_ratio_window",
+      "edr_unique_logon_type_count_window",
+      "logon_velocity_zscore",
+      "off_hours_auth_count",
+      "unique_workstations_300s"
+    ],
+    "test_hosts_evaluated": 23,
+    "threat_hosts_in_test": 2,
+    "threat_host_ranks": {
+      "SOCL4-61": 1,
+      "SOCL8-03": 22
+    },
+    "top_k_metrics": [
+      {
+        "Top_K": 1,
+        "Workforce_Pct": "4.35%",
+        "True_Positives": 1,
+        "False_Positives": 0,
+        "Recall": "50.0%",
+        "Precision": "100.0%",
+        "F1_Score": 0.6667
+      },
+      {
+        "Top_K": 2,
+        "Workforce_Pct": "8.7%",
+        "True_Positives": 1,
+        "False_Positives": 1,
+        "Recall": "50.0%",
+        "Precision": "50.0%",
+        "F1_Score": 0.5
+      },
+      {
+        "Top_K": 3,
+        "Workforce_Pct": "13.04%",
+        "True_Positives": 1,
+        "False_Positives": 2,
+        "Recall": "50.0%",
+        "Precision": "33.33%",
+        "F1_Score": 0.4
+      },
+      {
+        "Top_K": 5,
+        "Workforce_Pct": "21.74%",
+        "True_Positives": 1,
+        "False_Positives": 4,
+        "Recall": "50.0%",
+        "Precision": "20.0%",
+        "F1_Score": 0.2857
+      },
+      {
+        "Top_K": 10,
+        "Workforce_Pct": "43.48%",
+        "True_Positives": 1,
+        "False_Positives": 9,
+        "Recall": "50.0%",
+        "Precision": "10.0%",
+        "F1_Score": 0.1667
+      },
+      {
+        "Top_K": 20,
+        "Workforce_Pct": "86.96%",
+        "True_Positives": 1,
+        "False_Positives": 19,
+        "Recall": "50.0%",
+        "Precision": "5.0%",
+        "F1_Score": 0.0909
+      }
+    ]
+  },
+  "lsass-monitor": {
+    "features": [
+      "event_count",
+      "handle_requests",
+      "memory_dump_attempts"
+    ],
+    "test_hosts_evaluated": 23,
+    "threat_hosts_in_test": 1,
+    "threat_host_ranks": {
+      "SOCL4-61": 9
+    },
+    "top_k_metrics": [
+      {
+        "Top_K": 1,
+        "Workforce_Pct": "4.35%",
+        "True_Positives": 0,
+        "False_Positives": 1,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 2,
+        "Workforce_Pct": "8.7%",
+        "True_Positives": 0,
+        "False_Positives": 2,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 3,
+        "Workforce_Pct": "13.04%",
+        "True_Positives": 0,
+        "False_Positives": 3,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 5,
+        "Workforce_Pct": "21.74%",
+        "True_Positives": 0,
+        "False_Positives": 5,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 10,
+        "Workforce_Pct": "43.48%",
+        "True_Positives": 1,
+        "False_Positives": 9,
+        "Recall": "100.0%",
+        "Precision": "10.0%",
+        "F1_Score": 0.1818
+      },
+      {
+        "Top_K": 20,
+        "Workforce_Pct": "86.96%",
+        "True_Positives": 1,
+        "False_Positives": 19,
+        "Recall": "100.0%",
+        "Precision": "5.0%",
+        "F1_Score": 0.0952
+      }
+    ]
+  },
+  "process-watcher": {
+    "features": [
+      "admin_process_count",
+      "daily_unique_process_count",
+      "etw_realtime_active",
+      "executables_from_temp_folder",
+      "process_count",
+      "tunneling_process_count"
+    ],
+    "test_hosts_evaluated": 23,
+    "threat_hosts_in_test": 0,
+    "threat_host_ranks": {},
+    "top_k_metrics": [
+      {
+        "Top_K": 1,
+        "Workforce_Pct": "4.35%",
+        "True_Positives": 0,
+        "False_Positives": 1,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 2,
+        "Workforce_Pct": "8.7%",
+        "True_Positives": 0,
+        "False_Positives": 2,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 3,
+        "Workforce_Pct": "13.04%",
+        "True_Positives": 0,
+        "False_Positives": 3,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 5,
+        "Workforce_Pct": "21.74%",
+        "True_Positives": 0,
+        "False_Positives": 5,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 10,
+        "Workforce_Pct": "43.48%",
+        "True_Positives": 0,
+        "False_Positives": 10,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 20,
+        "Workforce_Pct": "86.96%",
+        "True_Positives": 0,
+        "False_Positives": 20,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      }
+    ]
+  },
+  "decoy-monitor": {
+    "features": [
+      "current_size",
+      "events_recorded"
+    ],
+    "test_hosts_evaluated": 23,
+    "threat_hosts_in_test": 2,
+    "threat_host_ranks": {
+      "SOCL4-61": 9,
+      "SOCL8-03": 22
+    },
+    "top_k_metrics": [
+      {
+        "Top_K": 1,
+        "Workforce_Pct": "4.35%",
+        "True_Positives": 0,
+        "False_Positives": 1,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 2,
+        "Workforce_Pct": "8.7%",
+        "True_Positives": 0,
+        "False_Positives": 2,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 3,
+        "Workforce_Pct": "13.04%",
+        "True_Positives": 0,
+        "False_Positives": 3,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 5,
+        "Workforce_Pct": "21.74%",
+        "True_Positives": 0,
+        "False_Positives": 5,
+        "Recall": "0.0%",
+        "Precision": "0.0%",
+        "F1_Score": 0.0
+      },
+      {
+        "Top_K": 10,
+        "Workforce_Pct": "43.48%",
+        "True_Positives": 1,
+        "False_Positives": 9,
+        "Recall": "50.0%",
+        "Precision": "10.0%",
+        "F1_Score": 0.1667
+      },
+      {
+        "Top_K": 20,
+        "Workforce_Pct": "86.96%",
+        "True_Positives": 1,
+        "False_Positives": 19,
+        "Recall": "50.0%",
+        "Precision": "5.0%",
+        "F1_Score": 0.0909
+      }
+    ]
+  }
+}

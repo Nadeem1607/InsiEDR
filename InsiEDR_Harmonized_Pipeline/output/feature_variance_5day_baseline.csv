@@ -1,0 +1,78 @@
+feed,feature,mean,std,variance,min,max,category,total_samples,clean_hosts
+short-term_edr_feature,auth_fail_rate_300s,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),61289,209
+short-term_edr_feature,auth_rate_300s,0.0,0.004,1.6e-05,0.0,0.4,LOW_VARIANCE (Rare / Low Scale),61289,209
+short-term_edr_feature,auth_rate_3600s,0.0001,0.0047,2.2e-05,0.0,0.2667,LOW_VARIANCE (Rare / Low Scale),61289,209
+short-term_edr_feature,edr_auth_event_count_window,0.0002,0.0198,0.000392,0.0,2.0,LOW_VARIANCE (Rare / Low Scale),61289,209
+short-term_edr_feature,edr_auth_events_per_minute_window,0.0,0.004,1.6e-05,0.0,0.4,LOW_VARIANCE (Rare / Low Scale),61289,209
+short-term_edr_feature,edr_failed_auth_events_per_minute_window,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),61289,209
+short-term_edr_feature,edr_failed_auth_ratio_window,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),61289,209
+short-term_edr_feature,edr_unique_logon_type_count_window,1.0001,0.009,8.2e-05,1.0,2.0,LOW_VARIANCE (Rare / Low Scale),61289,209
+short-term_edr_feature,logon_velocity_zscore,-0.4995,0.0396,0.001566,-0.5,3.5,LOW_VARIANCE (Rare / Low Scale),61289,209
+short-term_edr_feature,off_hours_auth_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),61289,209
+short-term_edr_feature,unique_workstations_300s,0.0002,0.0198,0.000392,0.0,2.0,LOW_VARIANCE (Rare / Low Scale),61289,209
+decoy-monitor,current_size,36.0,0.0,0.0,36.0,36.0,ZERO_VARIANCE (Constant Invariant),64974,209
+decoy-monitor,events_recorded,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,after_hours_logon,0.1435,1.4101,1.988457,0.0,14.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,concurrent_sessions,1.0,0.0,0.0,1.0,1.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,daily_after_hours_logon_ratio,0.0054,0.0541,0.002923,0.0,0.778,LOW_VARIANCE (Rare / Low Scale),64974,209
+logon,daily_pc_access_entropy,0.0499,0.3781,0.142928,0.0,3.459,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,daily_unique_pc_count,1.1137,0.8881,0.7888,1.0,11.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,etw_lifecycle_events_started_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,etw_lifecycle_events_stopped_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,event_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,failed_logons,0.4301,12.055,145.323943,0.0,367.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,first_logon_time,9.2522,1.3704,1.877929,8.0,18.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,interactive_duration_seconds,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,last_logoff_time,16.9042,0.9745,0.949577,9.0,20.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,logoff_count,4.0467,29.8313,889.904887,0.0,466.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,logon_count,4.0467,29.8313,889.904887,0.0,466.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,logon_entropy,0.0499,0.3781,0.142928,0.0,3.459,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,logon_type,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,session_duration_avg,3600.0,0.0,0.0,3600.0,3600.0,ZERO_VARIANCE (Constant Invariant),64974,209
+logon,successful_logons,4.0467,29.8313,889.904887,0.0,466.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,unique_pc_count,1.1137,0.8881,0.7888,1.0,11.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+logon,weekend_logon,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+lsass-monitor,event_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+lsass-monitor,handle_requests,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+lsass-monitor,memory_dump_attempts,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+process-watcher,admin_process_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+process-watcher,daily_unique_process_count,207.9374,33.0383,1091.52988,76.0,313.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+process-watcher,etw_realtime_active,0.5866,0.4924,0.2425,0.0,1.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+process-watcher,executables_from_temp_folder,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+process-watcher,process_count,207.9374,33.0383,1091.52988,76.0,313.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+process-watcher,tunneling_process_count,0.0137,0.1162,0.01351,0.0,1.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+devices,after_hours_usb_usage,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+devices,daily_device_connect_count,0.715,1.4282,2.039804,0.0,8.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+devices,daily_device_usage_flag,0.3146,0.4644,0.215622,0.0,1.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+devices,first_usb_usage_time,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+devices,usb_connect_count,0.715,1.4282,2.039804,0.0,8.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+devices,usb_devices_count,0.715,1.4282,2.039804,0.0,8.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+devices,usb_disconnect_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+file-integrity-monitor,daily_file_access_entropy,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+file-integrity-monitor,daily_new_filename_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+file-integrity-monitor,daily_unique_filename_count,6.583,4.7826,22.873422,1.0,19.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+file-integrity-monitor,event_count,6.583,4.7826,22.873422,1.0,19.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+file-integrity-monitor,file_access_count,6.583,4.7826,22.873422,1.0,19.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+file-integrity-monitor,monitor_active,1.0,0.0,0.0,1.0,1.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,browser_db_found,0.9993,0.0269,0.000723,0.0,1.0,LOW_VARIANCE (Rare / Low Scale),64974,209
+http,cloud_storage_uploads,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,daily_domain_access_entropy,0.1874,0.5689,0.323637,0.0,2.777,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,daily_external_domain_ratio,0.1829,0.3789,0.143528,0.0,1.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,daily_http_request_count,8.4306,29.8936,893.629674,0.0,359.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,daily_new_domain_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,daily_unique_domain_count,0.7267,2.1185,4.487866,0.0,17.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,domain_entropy,0.1874,0.5689,0.323637,0.0,2.777,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,external_url_ratio,0.1829,0.3789,0.143528,0.0,1.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,file_sharing_site_visits,0.0645,0.6401,0.409765,0.0,9.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,get_requests,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,http_after_hours,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,http_count,8.4306,29.8936,893.629674,0.0,359.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,http_requests,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,job_search_site_visits,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,status_4xx_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,status_5xx_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,suspicious_url_count,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,unique_url_count,4.5832,15.1608,229.851233,0.0,190.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,unusual_user_agents,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209
+http,url_access_count,8.4306,29.8936,893.629674,0.0,359.0,ACTIVE_VARIANCE (Dynamic Fluctuations),64974,209
+http,watchlisted_domain_hits,0.0,0.0,0.0,0.0,0.0,ZERO_VARIANCE (Constant Invariant),64974,209

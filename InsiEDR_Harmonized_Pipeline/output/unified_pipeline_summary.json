@@ -1,0 +1,75 @@
+{
+  "execution_time_seconds": 12.02,
+  "total_test_hosts": 23,
+  "total_threat_hosts": 2,
+  "threat_host_ranks": {
+    "SOCL4-61": {
+      "rank": 1,
+      "scenario": "SIM_KILL_CHAIN",
+      "score": 28.7814,
+      "triggered_feeds": "decoy-monitor, file-integrity-monitor, http, lsass-monitor, process-watcher, short-term_edr_feature"
+    },
+    "SOCL8-03": {
+      "rank": 2,
+      "scenario": "SIM_HONEYTOKEN_TRIP",
+      "score": 17.5061,
+      "triggered_feeds": "decoy-monitor, file-integrity-monitor, logon, process-watcher"
+    }
+  },
+  "top_k_table": [
+    {
+      "Top_K_Reviewed": 1,
+      "Workforce_Pct": "4.35%",
+      "Threats_Caught": "1 / 2",
+      "False_Alarms": 0,
+      "Recall": "50.0%",
+      "Precision": "100.0%",
+      "F1_Score": 0.6667
+    },
+    {
+      "Top_K_Reviewed": 2,
+      "Workforce_Pct": "8.7%",
+      "Threats_Caught": "2 / 2",
+      "False_Alarms": 0,
+      "Recall": "100.0%",
+      "Precision": "100.0%",
+      "F1_Score": 1.0
+    },
+    {
+      "Top_K_Reviewed": 3,
+      "Workforce_Pct": "13.04%",
+      "Threats_Caught": "2 / 2",
+      "False_Alarms": 1,
+      "Recall": "100.0%",
+      "Precision": "66.67%",
+      "F1_Score": 0.8
+    },
+    {
+      "Top_K_Reviewed": 5,
+      "Workforce_Pct": "21.74%",
+      "Threats_Caught": "2 / 2",
+      "False_Alarms": 3,
+      "Recall": "100.0%",
+      "Precision": "40.0%",
+      "F1_Score": 0.5714
+    },
+    {
+      "Top_K_Reviewed": 10,
+      "Workforce_Pct": "43.48%",
+      "Threats_Caught": "2 / 2",
+      "False_Alarms": 8,
+      "Recall": "100.0%",
+      "Precision": "20.0%",
+      "F1_Score": 0.3333
+    },
+    {
+      "Top_K_Reviewed": 20,
+      "Workforce_Pct": "86.96%",
+      "Threats_Caught": "2 / 2",
+      "False_Alarms": 18,
+      "Recall": "100.0%",
+      "Precision": "10.0%",
+      "F1_Score": 0.1818
+    }
+  ]
+}
