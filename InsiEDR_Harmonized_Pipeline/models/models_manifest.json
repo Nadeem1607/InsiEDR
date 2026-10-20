@@ -1,0 +1,166 @@
+{
+  "short-term_edr_feature": {
+    "features_used": [
+      "auth_fail_rate_300s",
+      "auth_rate_300s",
+      "auth_rate_3600s",
+      "edr_auth_event_count_window",
+      "edr_auth_events_per_minute_window",
+      "edr_failed_auth_events_per_minute_window",
+      "edr_failed_auth_ratio_window",
+      "edr_unique_logon_type_count_window",
+      "logon_velocity_zscore",
+      "off_hours_auth_count",
+      "unique_workstations_300s"
+    ],
+    "num_features": 11,
+    "val_false_alarm_rate": 0.0,
+    "test_threat_hosts": [
+      "SOCL8-03",
+      "SOCL4-61"
+    ],
+    "isolation_forest_model": "short-term_edr_feature_domain_if.joblib",
+    "scenario_xgb_model": "short-term_edr_feature_scenario_xgb.joblib"
+  },
+  "decoy-monitor": {
+    "features_used": [
+      "current_size",
+      "events_recorded"
+    ],
+    "num_features": 2,
+    "val_false_alarm_rate": 0.0,
+    "test_threat_hosts": [
+      "SOCL8-03",
+      "SOCL4-61"
+    ],
+    "isolation_forest_model": "decoy-monitor_domain_if.joblib",
+    "scenario_xgb_model": "decoy-monitor_scenario_xgb.joblib"
+  },
+  "logon": {
+    "features_used": [
+      "after_hours_logon",
+      "concurrent_sessions",
+      "daily_after_hours_logon_ratio",
+      "daily_pc_access_entropy",
+      "daily_unique_pc_count",
+      "etw_lifecycle_events_started_count",
+      "etw_lifecycle_events_stopped_count",
+      "event_count",
+      "failed_logons",
+      "first_logon_time",
+      "interactive_duration_seconds",
+      "last_logoff_time",
+      "logoff_count",
+      "logon_count",
+      "logon_entropy",
+      "logon_type",
+      "session_duration_avg",
+      "successful_logons",
+      "unique_pc_count",
+      "weekend_logon"
+    ],
+    "num_features": 20,
+    "val_false_alarm_rate": 0.0,
+    "test_threat_hosts": [
+      "SOCL8-03"
+    ],
+    "isolation_forest_model": "logon_domain_if.joblib",
+    "scenario_xgb_model": "logon_scenario_xgb.joblib"
+  },
+  "lsass-monitor": {
+    "features_used": [
+      "event_count",
+      "handle_requests",
+      "memory_dump_attempts"
+    ],
+    "num_features": 3,
+    "val_false_alarm_rate": 0.0,
+    "test_threat_hosts": [
+      "SOCL4-61"
+    ],
+    "isolation_forest_model": "lsass-monitor_domain_if.joblib",
+    "scenario_xgb_model": "lsass-monitor_scenario_xgb.joblib"
+  },
+  "process-watcher": {
+    "features_used": [
+      "admin_process_count",
+      "daily_unique_process_count",
+      "etw_realtime_active",
+      "executables_from_temp_folder",
+      "process_count",
+      "tunneling_process_count"
+    ],
+    "num_features": 6,
+    "val_false_alarm_rate": 0.06978360135000992,
+    "test_threat_hosts": [],
+    "isolation_forest_model": "process-watcher_domain_if.joblib",
+    "scenario_xgb_model": "process-watcher_scenario_xgb.joblib"
+  },
+  "devices": {
+    "features_used": [
+      "after_hours_usb_usage",
+      "daily_device_connect_count",
+      "daily_device_usage_flag",
+      "first_usb_usage_time",
+      "usb_connect_count",
+      "usb_devices_count",
+      "usb_disconnect_count"
+    ],
+    "num_features": 7,
+    "val_false_alarm_rate": 0.1295910264046059,
+    "test_threat_hosts": [],
+    "isolation_forest_model": "devices_domain_if.joblib",
+    "scenario_xgb_model": "devices_scenario_xgb.joblib"
+  },
+  "file-integrity-monitor": {
+    "features_used": [
+      "daily_file_access_entropy",
+      "daily_new_filename_count",
+      "daily_unique_filename_count",
+      "event_count",
+      "file_access_count",
+      "monitor_active"
+    ],
+    "num_features": 6,
+    "val_false_alarm_rate": 0.30692872741711336,
+    "test_threat_hosts": [
+      "SOCL8-03",
+      "SOCL4-61"
+    ],
+    "isolation_forest_model": "file-integrity-monitor_domain_if.joblib",
+    "scenario_xgb_model": "file-integrity-monitor_scenario_xgb.joblib"
+  },
+  "http": {
+    "features_used": [
+      "browser_db_found",
+      "cloud_storage_uploads",
+      "daily_domain_access_entropy",
+      "daily_external_domain_ratio",
+      "daily_http_request_count",
+      "daily_new_domain_count",
+      "daily_unique_domain_count",
+      "domain_entropy",
+      "external_url_ratio",
+      "file_sharing_site_visits",
+      "get_requests",
+      "http_after_hours",
+      "http_count",
+      "http_requests",
+      "job_search_site_visits",
+      "status_4xx_count",
+      "status_5xx_count",
+      "suspicious_url_count",
+      "unique_url_count",
+      "unusual_user_agents",
+      "url_access_count",
+      "watchlisted_domain_hits"
+    ],
+    "num_features": 22,
+    "val_false_alarm_rate": 0.048491165376216,
+    "test_threat_hosts": [
+      "SOCL4-61"
+    ],
+    "isolation_forest_model": "http_domain_if.joblib",
+    "scenario_xgb_model": "http_scenario_xgb.joblib"
+  }
+}

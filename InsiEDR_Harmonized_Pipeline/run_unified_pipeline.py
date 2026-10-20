@@ -33,9 +33,12 @@ from src.data_loader import (
 )
 from src.domain_isolation_forest import DomainIsolationForest
 from src.scenario_classifier_xgb import ScenarioXGBClassifier
+import joblib
 
 OUTPUT_DIR = os.path.join(current_dir, "output")
+MODELS_DIR = os.path.join(current_dir, "models")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(MODELS_DIR, exist_ok=True)
 
 CORE_FEEDS = [
     "short-term_edr_feature",
@@ -121,15 +124,28 @@ def main():
         scored_subset = test_df[keep_cols].copy()
         all_test_scored_records.append(scored_subset)
 
+        # 4. Save trained models to models/ directory
+        if_model_name = f"{cname}_domain_if.joblib"
+        xgb_model_name = f"{cname}_scenario_xgb.joblib"
+        joblib.dump(dom_if, os.path.join(MODELS_DIR, if_model_name))
+        joblib.dump(xgb_clf, os.path.join(MODELS_DIR, xgb_model_name))
+
         elapsed = time.time() - t0
         threats_in_test = test_df[test_df["is_threat"] == 1]["hostname"].unique().tolist()
         print(f"[{cname:23s}] Evaluated in {elapsed:4.1f}s | Clean Val False Alarms: {val_alarm_rate:5.2%} | Test Threat Hosts: {threats_in_test}")
 
         feed_summaries[cname] = {
-            "features_used": len(feat_cols),
+            "features_used": feat_cols,
+            "num_features": len(feat_cols),
             "val_false_alarm_rate": float(val_alarm_rate),
-            "test_threat_hosts": threats_in_test
+            "test_threat_hosts": threats_in_test,
+            "isolation_forest_model": if_model_name,
+            "scenario_xgb_model": xgb_model_name
         }
+
+    # Save models manifest
+    with open(os.path.join(MODELS_DIR, "models_manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(feed_summaries, f, indent=2)
 
     # Concatenate all scored test records
     print("\n" + "=" * 80)
