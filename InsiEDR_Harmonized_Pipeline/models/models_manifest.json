@@ -162,5 +162,16 @@
     ],
     "isolation_forest_model": "http_domain_if.joblib",
     "scenario_xgb_model": "http_scenario_xgb.joblib"
+  },
+  "tier3_red_rvfl": {
+    "model_type": "Deep RedRVFL (Random Vector Functional Link)",
+    "feature_extractor": "RandomLSTM",
+    "hidden_size": 64,
+    "num_layers": 3,
+    "sequence_length": 5,
+    "ridge_alpha": 0.01,
+    "model_file": "tier3_red_rvfl_orchestrator.joblib",
+    "clean_training_hosts": 129,
+    "test_sequences_evaluated": 161
   }
 }

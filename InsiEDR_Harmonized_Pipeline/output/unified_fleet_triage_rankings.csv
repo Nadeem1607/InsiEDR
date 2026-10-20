@@ -1,24 +1,24 @@
-hostname,is_threat_host,threat_scenario,total_telemetry_ticks,high_risk_ticks,peak_fused_risk,mean_fused_risk,triggered_feeds,host_score,rank
-SOCL4-61,1,SIM_KILL_CHAIN,67729,20270,1.0,0.2012,"decoy-monitor, file-integrity-monitor, http, lsass-monitor, process-watcher, short-term_edr_feature",28.7814,1
-SOCL8-03,1,SIM_HONEYTOKEN_TRIP,14442,5188,1.0,0.242,"decoy-monitor, file-integrity-monitor, logon, process-watcher",17.5061,2
-DESKTOP-0O03IU9,0,BENIGN,8101,1203,0.8124,0.1472,"http, process-watcher",4.1765,3
-SOCL8-01,0,BENIGN,13347,2793,0.5816,0.1267,"devices, process-watcher",3.9243,4
-SANDY,0,BENIGN,765,219,1.0,0.2245,"file-integrity-monitor, process-watcher",3.3366,5
-SOCL5-46,0,BENIGN,2161,368,1.0,0.1625,"file-integrity-monitor, process-watcher",3.1362,6
-CSL-28,0,BENIGN,207,78,1.0,0.3036,"devices, file-integrity-monitor, process-watcher",2.6905,7
-SOCL5-42,0,BENIGN,1066,356,0.6513,0.2013,"devices, file-integrity-monitor, process-watcher",2.4855,8
-VS,0,BENIGN,1887,239,1.0,0.149,file-integrity-monitor,2.3186,9
-SOCL5-48,0,BENIGN,1147,286,0.8735,0.1369,"file-integrity-monitor, process-watcher",2.0376,10
-SOCL5-47,0,BENIGN,1256,438,0.5816,0.1636,"devices, file-integrity-monitor, process-watcher",2.0035,11
-SOCL5-44,0,BENIGN,1505,382,0.6513,0.1405,"file-integrity-monitor, process-watcher",1.8006,12
-SOCL5--41,0,BENIGN,1715,419,0.6513,0.131,"file-integrity-monitor, process-watcher",1.7595,13
-DESKTOP-F7OHCO2,0,BENIGN,1012,128,1.0,0.1387,process-watcher,1.5806,14
-SOCL5-49,0,BENIGN,227,58,1.0,0.1879,"file-integrity-monitor, process-watcher",1.4389,15
-SOCL5-51,0,BENIGN,1558,396,0.5578,0.1245,"file-integrity-monitor, process-watcher",1.3929,16
-CSL-19,0,BENIGN,48,18,1.0,0.3149,"devices, file-integrity-monitor, process-watcher",1.3404,17
-SOCL5-52,0,BENIGN,1483,255,0.6513,0.1218,"file-integrity-monitor, process-watcher",1.2772,18
-SOCL5-50,0,BENIGN,1229,285,0.5653,0.0958,"file-integrity-monitor, process-watcher",0.9235,19
-DESKTOP-H6EAHHC,0,BENIGN,64,22,0.5936,0.1951,"devices, file-integrity-monitor, process-watcher",0.546,20
-DESKTOP-1628N81,0,BENIGN,1082,44,0.5168,0.0389,"http, process-watcher",0.1367,21
-SOCL5-45,0,BENIGN,2214,5,0.3762,0.0494,process-watcher,0.0424,22
-DESKTOP-MPFCUVM,0,BENIGN,639,0,0.2558,0.0393,None,0.0103,23
+hostname,is_threat_host,threat_scenario,total_ticks,high_risk_ticks,peak_fused_risk,mean_fused_risk,host_score,rvfl_max_drift_error,rvfl_mean_drift_error,rvfl_score,rank,triggered_feeds
+SOCL4-61,1,SIM_KILL_CHAIN,67729,20270,1.0,0.2012,28.7814,0.3581,0.0218,0.0115,1,"decoy-monitor, file-integrity-monitor, http, lsass-monitor, process-watcher, short-term_edr_feature"
+SOCL8-03,1,SIM_HONEYTOKEN_TRIP,14442,5188,1.0,0.242,17.5061,0.4062,0.0709,0.0292,2,"decoy-monitor, file-integrity-monitor, logon, process-watcher"
+DESKTOP-0O03IU9,0,BENIGN,8101,1203,0.8124,0.1472,4.1765,0.0414,0.0231,0.001,3,"http, process-watcher"
+SOCL8-01,0,BENIGN,13347,2793,0.5816,0.1267,3.9243,0.0037,0.0037,0.0,4,"devices, process-watcher"
+SANDY,0,BENIGN,765,219,1.0,0.2245,3.3366,0.0366,0.0366,0.0014,5,"file-integrity-monitor, process-watcher"
+SOCL5-46,0,BENIGN,2161,368,1.0,0.1625,3.1362,0.0,0.0,0.0,6,"file-integrity-monitor, process-watcher"
+CSL-28,0,BENIGN,207,78,1.0,0.3036,2.6905,0.0,0.0,0.0,7,"devices, file-integrity-monitor, process-watcher"
+SOCL5-42,0,BENIGN,1066,356,0.6513,0.2013,2.4855,0.0,0.0,0.0,8,"devices, file-integrity-monitor, process-watcher"
+VS,0,BENIGN,1887,239,1.0,0.149,2.3186,0.0,0.0,0.0,9,file-integrity-monitor
+SOCL5-48,0,BENIGN,1147,286,0.8735,0.1369,2.0376,0.0,0.0,0.0,10,"file-integrity-monitor, process-watcher"
+SOCL5-47,0,BENIGN,1256,438,0.5816,0.1636,2.0035,0.0,0.0,0.0,11,"devices, file-integrity-monitor, process-watcher"
+SOCL5-44,0,BENIGN,1505,382,0.6513,0.1405,1.8006,0.0,0.0,0.0,12,"file-integrity-monitor, process-watcher"
+SOCL5--41,0,BENIGN,1715,419,0.6513,0.131,1.7595,0.0,0.0,0.0,13,"file-integrity-monitor, process-watcher"
+DESKTOP-F7OHCO2,0,BENIGN,1012,128,1.0,0.1387,1.5806,0.0,0.0,0.0,14,process-watcher
+SOCL5-49,0,BENIGN,227,58,1.0,0.1879,1.4389,0.0,0.0,0.0,15,"file-integrity-monitor, process-watcher"
+SOCL5-51,0,BENIGN,1558,396,0.5578,0.1245,1.3929,0.0,0.0,0.0,16,"file-integrity-monitor, process-watcher"
+CSL-19,0,BENIGN,48,18,1.0,0.3149,1.3404,0.0,0.0,0.0,17,"devices, file-integrity-monitor, process-watcher"
+SOCL5-52,0,BENIGN,1483,255,0.6513,0.1218,1.2772,0.0,0.0,0.0,18,"file-integrity-monitor, process-watcher"
+SOCL5-50,0,BENIGN,1229,285,0.5653,0.0958,0.9235,0.0,0.0,0.0,19,"file-integrity-monitor, process-watcher"
+DESKTOP-H6EAHHC,0,BENIGN,64,22,0.5936,0.1951,0.546,0.0,0.0,0.0,20,"devices, file-integrity-monitor, process-watcher"
+DESKTOP-1628N81,0,BENIGN,1082,44,0.5168,0.0389,0.1367,0.0,0.0,0.0,21,"http, process-watcher"
+SOCL5-45,0,BENIGN,2214,5,0.3762,0.0494,0.0424,0.0,0.0,0.0,22,process-watcher
+DESKTOP-MPFCUVM,0,BENIGN,639,0,0.2558,0.0393,0.0103,0.0,0.0,0.0,23,None

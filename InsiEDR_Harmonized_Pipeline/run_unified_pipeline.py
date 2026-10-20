@@ -33,6 +33,8 @@ from src.data_loader import (
 )
 from src.domain_isolation_forest import DomainIsolationForest
 from src.scenario_classifier_xgb import ScenarioXGBClassifier
+from src.temporal_risk_aggregator import TemporalRiskAggregator
+from src.red_rvfl_orchestrator import RedRVFLOrchestrator
 import joblib
 
 OUTPUT_DIR = os.path.join(current_dir, "output")
@@ -64,7 +66,8 @@ def main():
     train_target_hosts = {"SOCL2-64", "DSL-174", "DATASL-173", "MCALAB1-07", "SOCL8-53"}
     test_target_hosts = {"SOCL8-03", "SOCL4-61"}
 
-    # Container for all scored test observations across feeds
+    # Container for all scored test and train observations across feeds
+    all_train_scored_records = []
     all_test_scored_records = []
     feed_summaries = {}
 
@@ -124,6 +127,15 @@ def main():
         scored_subset = test_df[keep_cols].copy()
         all_test_scored_records.append(scored_subset)
 
+        # Collect scored train split for Tier 3 RedRVFL
+        train_anom = dom_if.score_anomaly(X_train)
+        train_scen = xgb_clf.get_max_threat_prob(X_train)
+        train_df["feed"] = cname
+        train_df["anomaly_score"] = train_anom
+        train_df["scenario_prob"] = train_scen
+        train_df["fused_risk"] = np.maximum(train_anom, 0.3 * train_anom + 0.7 * train_scen)
+        all_train_scored_records.append(train_df[keep_cols].copy())
+
         # 4. Save trained models to models/ directory
         if_model_name = f"{cname}_domain_if.joblib"
         xgb_model_name = f"{cname}_scenario_xgb.joblib"
@@ -147,62 +159,62 @@ def main():
     with open(os.path.join(MODELS_DIR, "models_manifest.json"), "w", encoding="utf-8") as f:
         json.dump(feed_summaries, f, indent=2)
 
-    # Concatenate all scored test records
+    # -------------------------------------------------------------
+    # TIER 3: DEEP RedRVFL NEURAL TEMPORAL SEQUENCE MODELING
+    # -------------------------------------------------------------
     print("\n" + "=" * 80)
-    print("FUSING MULTI-DOMAIN RISK SIGNALS ACROSS FLEET WORKSTATIONS")
+    print("TIER 3: TRAINING DEEP RedRVFL ON CLEAN BASELINE SEQUENCES")
     print("=" * 80)
 
+    unified_train_df = pd.concat(all_train_scored_records, ignore_index=True)
     unified_test_df = pd.concat(all_test_scored_records, ignore_index=True)
-    print(f"Total scored test observations across 8 feeds: {len(unified_test_df):,}")
+    print(f"Total scored train observations across 8 feeds: {len(unified_train_df):,}")
+    print(f"Total scored test observations across 8 feeds:  {len(unified_test_df):,}")
 
-    # Workstation-level multi-domain aggregation
-    # Non-linear correlation: Anti-stacking max-pool across domains + duration accumulation
-    host_triage_records = []
-    all_hosts = unified_test_df["hostname"].unique()
+    risk_agg = TemporalRiskAggregator(if_weight=0.3, xgb_weight=0.7, seq_len=5, hidden_size=64, num_layers=3, ridge_alpha=0.01)
+    clean_bg_hosts = set(unified_train_df["hostname"].unique()) - train_target_hosts
+    print(f"Fitting RedRVFL on clean sequences from {len(clean_bg_hosts)} background workstations...")
+    risk_agg.fit_red_rvfl(unified_train_df, clean_hosts=clean_bg_hosts)
 
-    for host in all_hosts:
-        h_df = unified_test_df[unified_test_df["hostname"] == host]
-        
-        is_threat = int(h_df["is_threat"].max())
-        threat_scenarios = h_df.loc[h_df["is_threat"] == 1, "scenario_id"].unique().tolist()
-        threat_scenario_name = ", ".join(threat_scenarios) if threat_scenarios else "BENIGN"
+    print("Evaluating Tier 3 RedRVFL Sequence Drift Forecasting on Test Fleet...")
+    redrvfl_drift_df = risk_agg.predict_red_rvfl_drift(unified_test_df)
 
-        # Per-feed peak risks on this host
-        feed_peaks = h_df.groupby("feed")["fused_risk"].max().to_dict()
+    # Save Tier 3 RedRVFL model
+    rvfl_model_name = "tier3_red_rvfl_orchestrator.joblib"
+    joblib.dump(risk_agg.red_rvfl, os.path.join(MODELS_DIR, rvfl_model_name))
+    print(f"Saved Tier 3 RedRVFL model to: {os.path.join(MODELS_DIR, rvfl_model_name)}")
 
-        # Non-linear multi-domain risk (Max across domains prevents artificial linear stacking)
-        peak_fused_risk = float(h_df["fused_risk"].max())
-        mean_fused_risk = float(h_df["fused_risk"].mean())
-        
-        # High-risk ticks across any feed (ticks where risk >= 0.3)
-        high_risk_ticks = int((h_df["fused_risk"] >= 0.3).sum())
+    feed_summaries["tier3_red_rvfl"] = {
+        "model_type": "Deep RedRVFL (Random Vector Functional Link)",
+        "feature_extractor": "RandomLSTM",
+        "hidden_size": 64,
+        "num_layers": 3,
+        "sequence_length": 5,
+        "ridge_alpha": 0.01,
+        "model_file": rvfl_model_name,
+        "clean_training_hosts": len(clean_bg_hosts),
+        "test_sequences_evaluated": len(redrvfl_drift_df)
+    }
 
-        # Persistent host score: peak * mean * sqrt(high_risk_ticks)
-        host_score = peak_fused_risk * (mean_fused_risk + 0.001) * np.sqrt(max(high_risk_ticks, 1))
+    # Resave models manifest with RedRVFL included
+    with open(os.path.join(MODELS_DIR, "models_manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(feed_summaries, f, indent=2)
 
-        # Identify which feeds triggered on this host
-        triggered_feeds = [f for f, r in feed_peaks.items() if r >= 0.3]
+    # Workstation-level multi-domain aggregation with RedRVFL sequence drift
+    ranked_fleet = risk_agg.rank_workstations(unified_test_df, redrvfl_drift_df=redrvfl_drift_df)
 
-        host_triage_records.append({
-            "hostname": host,
-            "is_threat_host": is_threat,
-            "threat_scenario": threat_scenario_name,
-            "total_telemetry_ticks": len(h_df),
-            "high_risk_ticks": high_risk_ticks,
-            "peak_fused_risk": round(peak_fused_risk, 4),
-            "mean_fused_risk": round(mean_fused_risk, 4),
-            "triggered_feeds": ", ".join(triggered_feeds) if triggered_feeds else "None",
-            "host_score": round(host_score, 4)
-        })
+    # Identify triggered feeds per host
+    feed_peaks_per_host = unified_test_df.groupby(["hostname", "feed"])["fused_risk"].max().reset_index()
+    triggered_map = {}
+    for host, grp in feed_peaks_per_host.groupby("hostname"):
+        trig = grp.loc[grp["fused_risk"] >= 0.3, "feed"].tolist()
+        triggered_map[host] = ", ".join(trig) if trig else "None"
+    ranked_fleet["triggered_feeds"] = ranked_fleet["hostname"].map(triggered_map).fillna("None")
 
-    # Sort Workstations by composite host score
-    ranked_fleet = pd.DataFrame(host_triage_records).sort_values("host_score", ascending=False).reset_index(drop=True)
-    ranked_fleet["rank"] = ranked_fleet.index + 1
-
-    print("\n" + "=" * 90)
-    print("TOP 15 FLEET WORKSTATION TRIAGE QUEUE (OUT-OF-TIME TEST SPLIT: DAYS 6 TO 7)")
-    print("=" * 90)
-    cols_to_print = ["rank", "hostname", "is_threat_host", "threat_scenario", "peak_fused_risk", "high_risk_ticks", "host_score", "triggered_feeds"]
+    print("\n" + "=" * 95)
+    print("TOP 15 FLEET WORKSTATION TRIAGE QUEUE (WITH TIER 3 RedRVFL DRIFT)")
+    print("=" * 95)
+    cols_to_print = ["rank", "hostname", "is_threat_host", "threat_scenario", "peak_fused_risk", "rvfl_max_drift_error", "high_risk_ticks", "host_score", "triggered_feeds"]
     print(ranked_fleet.head(15)[cols_to_print].to_string(index=False))
 
     # Evaluate Top-K Review Queue Metrics across Fleet
